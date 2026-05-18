@@ -11,7 +11,7 @@ import { Section } from "../components/Section";
 import { ErrorState, LoadingState } from "../components/State";
 import { addMacroTotals } from "../lib/calculations";
 import { label, mealTypes } from "../lib/constants";
-import { addDays, todayKey, toDateKey } from "../lib/date";
+import { addDays, normalizeDateKey, todayKey, toDateKey } from "../lib/date";
 import { useApi } from "../hooks/useApi";
 import { determineDayType } from "../services/dayPriority";
 import { recommendRecipes } from "../services/recommendations";
@@ -126,7 +126,7 @@ export function Dashboard() {
                 {weekActivities.length === 0 ? <p className="text-sm text-slate-500">No activities in the next week.</p> : weekActivities.slice(0, 4).map((activity) => (
                   <div key={activity.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
                     <span className="font-black">{label(activity.activity_type)}</span>
-                    <span className="text-slate-500">{activity.date}</span>
+                    <span className="text-slate-500">{normalizeDateKey(activity.date)}</span>
                   </div>
                 ))}
               </div>

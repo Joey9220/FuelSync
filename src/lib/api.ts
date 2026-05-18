@@ -9,6 +9,7 @@ import type {
   Recipe,
   Stats,
 } from "../types";
+import { normalizeDateKey } from "./date";
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -64,7 +65,9 @@ export function createApiClient(getToken: () => Promise<string>) {
       if (params.date) query.set("date", params.date);
       if (params.from) query.set("from", params.from);
       if (params.to) query.set("to", params.to);
-      return request<{ activities: Activity[] }>(`/activities${query.size ? `?${query}` : ""}`).then((data) => data.activities);
+      return request<{ activities: Activity[] }>(`/activities${query.size ? `?${query}` : ""}`).then((data) =>
+        data.activities.map((activity) => ({ ...activity, date: normalizeDateKey(activity.date) })),
+      );
     },
     createActivity: (payload: ActivityPayload) =>
       request<{ activity: Activity }>("/activities", { method: "POST", body: JSON.stringify(payload) }).then(

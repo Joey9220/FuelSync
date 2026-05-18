@@ -1,5 +1,16 @@
 export function toDateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function normalizeDateKey(value: string | Date | null | undefined) {
+  if (!value) return "";
+  if (value instanceof Date) return toDateKey(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : toDateKey(parsed);
 }
 
 export function todayKey() {
@@ -26,9 +37,15 @@ export function weekDays(anchor = new Date()) {
 }
 
 export function formatShortDate(dateKey: string) {
-  return new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short" }).format(new Date(dateKey));
+  return new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short" }).format(parseDateKey(dateKey));
 }
 
 export function formatDayName(date: Date) {
   return new Intl.DateTimeFormat("en", { weekday: "short" }).format(date);
+}
+
+function parseDateKey(dateKey: string) {
+  const normalized = normalizeDateKey(dateKey);
+  const [year, month, day] = normalized.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 960" role="img" aria-labelledby="title desc">
+  <title id="title">FuelSync logo</title>
+  <desc id="desc">FuelSync logo with stylized F, fork, dumbbell, and wordmark.</desc>
+  <rect width="960" height="960" fill="#ffffff"/>
+  <g transform="translate(250 125)">
+    <path d="M156 96c69-64 171-91 267-68 128 31 221 135 237 263" fill="none" stroke="#08264a" stroke-width="38"/>
+    <path d="M649 383c-14 111-100 200-211 218-98 16-196-24-254-102" fill="none" stroke="#08264a" stroke-width="38" stroke-linecap="round"/>
+    <path d="M132 158v87M160 158v87M188 158v87M216 158v87" stroke="#08264a" stroke-width="12" stroke-linecap="round"/>
+    <path d="M114 158v94c0 41 24 74 56 88v116c0 20 16 36 36 36s36-16 36-36V340c32-14 56-47 56-88v-94" fill="none" stroke="#08264a" stroke-width="18" stroke-linecap="round"/>
+    <path d="M453 188h220c-20 56-52 86-96 86H459c-38 0-64 22-74 66l-6 26h202c-18 55-51 85-99 85H355l-38 171h-105l72-330c16-71 75-104 169-104Z" fill="#21b98a"/>
+    <path d="M702 337h70v46h-70zM675 383h124c14 0 25 11 25 25v18H650v-18c0-14 11-25 25-25ZM638 440h198c14 0 25 11 25 25v17c0 14-11 25-25 25H638c-14 0-25-11-25-25v-17c0-14 11-25 25-25Z" fill="#08264a"/>
+  </g>
+  <text x="480" y="710" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="124" font-weight="800" letter-spacing="-2">
+    <tspan fill="#08264a">Fuel</tspan><tspan fill="#21b98a">Sync</tspan>
+  </text>
+  <text x="480" y="788" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="10" fill="#08264a">FUEL YOUR TRAINING. NOURISH YOUR GOALS.</text>
+</svg>
