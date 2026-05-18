@@ -127,10 +127,10 @@ export function Recipes() {
                         <td className="border border-slate-200 px-3 py-2">{recipe.suitable_day_types.map(label).join(", ") || "-"}</td>
                         <td className="border border-slate-200 px-3 py-2">{recipe.suitable_timing.map(label).join(", ") || "-"}</td>
                         <td className="border border-slate-200 px-3 py-2">{recipe.tags?.join(", ") || "-"}</td>
-                        <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipe.totals.kcal)}</td>
-                        <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipe.totals.protein_g)}</td>
-                        <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipe.totals.fat_g)}</td>
-                        <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipe.totals.carbs_g)}</td>
+                        <MacroCell tone="kcal" value={recipe.totals.kcal} />
+                        <MacroCell tone="protein" value={recipe.totals.protein_g} />
+                        <MacroCell tone="fat" value={recipe.totals.fat_g} />
+                        <MacroCell tone="carbs" value={recipe.totals.carbs_g} />
                         <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipeWeight(recipe))}</td>
                         <td className="border border-slate-200 px-3 py-2" onClick={(event) => event.stopPropagation()}>
                           <div className="flex justify-end gap-1">
@@ -153,7 +153,7 @@ export function Recipes() {
                         <tr className="bg-slate-50">
                           <td className="border border-slate-200"></td>
                           <td colSpan={10} className="border border-slate-200 p-3">
-                            <div className="grid gap-3 xl:grid-cols-[1fr_260px]">
+                            <div>
                               <div className="overflow-x-auto">
                                 <table className="min-w-[720px] w-full border-collapse bg-white text-xs">
                                   <thead className="bg-white text-[11px] uppercase tracking-wide text-slate-500">
@@ -175,20 +175,16 @@ export function Recipes() {
                                           <td className="border border-slate-200 px-3 py-2 font-bold">{item.name}</td>
                                           <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(Number(item.quantity))}</td>
                                           <td className="border border-slate-200 px-3 py-2">{item.unit}</td>
-                                          <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(totals.kcal)}</td>
-                                          <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(totals.protein_g)}</td>
-                                          <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(totals.fat_g)}</td>
-                                          <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(totals.carbs_g)}</td>
+                                          <MacroCell tone="kcal" value={totals.kcal} />
+                                          <MacroCell tone="protein" value={totals.protein_g} />
+                                          <MacroCell tone="fat" value={totals.fat_g} />
+                                          <MacroCell tone="carbs" value={totals.carbs_g} />
                                         </tr>
                                       );
                                     })}
                                   </tbody>
                                 </table>
                                 {recipe.preparation_notes && <p className="mt-3 text-sm text-slate-600">{recipe.preparation_notes}</p>}
-                              </div>
-                              <div className="rounded-lg border border-slate-200 bg-white p-3">
-                                <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Recipe totals</div>
-                                <MacroBadges totals={recipe.totals} />
                               </div>
                             </div>
                           </td>
@@ -238,6 +234,21 @@ function SortableHeader({
         <span className={active ? "text-mint" : "text-slate-300"}>{active ? (direction === "asc" ? "↑" : "↓") : "↕"}</span>
       </button>
     </th>
+  );
+}
+
+function MacroCell({ tone, value }: { tone: "kcal" | "protein" | "fat" | "carbs"; value: number }) {
+  const tones = {
+    kcal: "bg-amber-50 text-amber-900",
+    protein: "bg-emerald-50 text-emerald-900",
+    fat: "bg-rose-50 text-rose-900",
+    carbs: "bg-sky-50 text-sky-900",
+  };
+
+  return (
+    <td className={`border border-slate-200 px-3 py-2 text-right font-black tabular-nums ${tones[tone]}`}>
+      {round(value)}
+    </td>
   );
 }
 
