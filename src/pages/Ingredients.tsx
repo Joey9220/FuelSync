@@ -3,7 +3,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Field, Input, Textarea } from "../components/FormField";
-import { MacroBadges } from "../components/MacroBadges";
 import { Modal } from "../components/Modal";
 import { EmptyState, ErrorState, LoadingState } from "../components/State";
 import { useApi } from "../hooks/useApi";
@@ -20,10 +19,15 @@ const emptyForm = {
   notes: "",
 };
 
+type IngredientSortKey = "name" | "kcal" | "protein_g" | "fat_g" | "carbs_g" | "default_quantity" | "unit";
+type SortDirection = "asc" | "desc";
+
 export function Ingredients() {
   const api = useApi();
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<IngredientSortKey>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Ingredient | null | "new">(null);
@@ -37,6 +41,20 @@ export function Ingredients() {
     const handle = window.setTimeout(load, 250);
     return () => window.clearTimeout(handle);
   }, [search]);
+
+  const sortedIngredients = useMemo(
+    () => sortRows(ingredients, sortKey, sortDirection),
+    [ingredients, sortKey, sortDirection],
+  );
+
+  function updateSort(key: IngredientSortKey) {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection("asc");
+  }
 
   return (
     <div className="space-y-5">
@@ -53,7 +71,7 @@ export function Ingredients() {
           <Search size={18} className="text-slate-400" />
           <input
             className="w-full outline-none"
-            placeholder="Search by name"
+            placeholder="Filter ingredients by name"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -61,23 +79,56 @@ export function Ingredients() {
       </Card>
 
       {error && <ErrorState message={error} />}
-      {loading ? <LoadingState label="Loading ingredients..." /> : ingredients.length === 0 ? (
+      {loading ? <LoadingState label="Loading ingredients..." /> : sortedIngredients.length === 0 ? (
         <EmptyState title="No ingredients yet" body="Add your first ingredient to start building recipes." />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {ingredients.map((ingredient) => (
-            <IngredientCard
-              key={ingredient.id}
-              ingredient={ingredient}
-              onEdit={() => setEditing(ingredient)}
-              onDelete={async () => {
-                if (!window.confirm(`Delete ${ingredient.name}?`)) return;
-                await api.deleteIngredient(ingredient.id);
-                load();
-              }}
-            />
-          ))}
-        </div>
+        <Card className="p-0">
+          <div className="overflow-x-auto">
+            <table className="min-w-[840px] w-full border-collapse text-left text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <SortableHeader label="Name" active={sortKey === "name"} direction={sortDirection} onClick={() => updateSort("name")} />
+                  <SortableHeader label="kcal" active={sortKey === "kcal"} direction={sortDirection} onClick={() => updateSort("kcal")} align="right" />
+                  <SortableHeader label="P" active={sortKey === "protein_g"} direction={sortDirection} onClick={() => updateSort("protein_g")} align="right" />
+                  <SortableHeader label="F" active={sortKey === "fat_g"} direction={sortDirection} onClick={() => updateSort("fat_g")} align="right" />
+                  <SortableHeader label="C" active={sortKey === "carbs_g"} direction={sortDirection} onClick={() => updateSort("carbs_g")} align="right" />
+                  <SortableHeader label="Default qty" active={sortKey === "default_quantity"} direction={sortDirection} onClick={() => updateSort("default_quantity")} align="right" />
+                  <SortableHeader label="Unit" active={sortKey === "unit"} direction={sortDirection} onClick={() => updateSort("unit")} />
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sortedIngredients.map((ingredient) => (
+                  <tr key={ingredient.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-black text-ink">{ingredient.name}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.kcal)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.protein_g)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.fat_g)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.carbs_g)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.default_quantity)}</td>
+                    <td className="px-4 py-3">{ingredient.unit}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1">
+                        <Button aria-label="Edit" variant="ghost" className="h-9 w-9 px-0" icon={<Edit2 size={16} />} onClick={() => setEditing(ingredient)} />
+                        <Button
+                          aria-label="Delete"
+                          variant="ghost"
+                          className="h-9 w-9 px-0 text-red-600"
+                          icon={<Trash2 size={16} />}
+                          onClick={async () => {
+                            if (!window.confirm(`Delete ${ingredient.name}?`)) return;
+                            await api.deleteIngredient(ingredient.id);
+                            load();
+                          }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {editing && (
@@ -94,33 +145,42 @@ export function Ingredients() {
   );
 }
 
-function IngredientCard({ ingredient, onEdit, onDelete }: { ingredient: Ingredient; onEdit: () => void; onDelete: () => void }) {
-  const totals = useMemo(
-    () => ({
-      kcal: Number(ingredient.kcal),
-      protein_g: Number(ingredient.protein_g),
-      carbs_g: Number(ingredient.carbs_g),
-      fat_g: Number(ingredient.fat_g),
-    }),
-    [ingredient],
-  );
-
+function SortableHeader({
+  label,
+  active,
+  direction,
+  align = "left",
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  direction: SortDirection;
+  align?: "left" | "right";
+  onClick: () => void;
+}) {
   return (
-    <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-black">{ingredient.name}</h2>
-          <p className="text-sm text-slate-500">per {ingredient.default_quantity} {ingredient.unit}</p>
-        </div>
-        <div className="flex gap-1">
-          <Button aria-label="Edit" variant="ghost" className="h-9 w-9 px-0" icon={<Edit2 size={16} />} onClick={onEdit} />
-          <Button aria-label="Delete" variant="ghost" className="h-9 w-9 px-0 text-red-600" icon={<Trash2 size={16} />} onClick={onDelete} />
-        </div>
-      </div>
-      <div className="mt-3"><MacroBadges totals={totals} /></div>
-      {ingredient.notes && <p className="mt-3 text-sm text-slate-500">{ingredient.notes}</p>}
-    </Card>
+    <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"}`}>
+      <button className="inline-flex items-center gap-1 font-black hover:text-ink" onClick={onClick} type="button">
+        {label}
+        <span className={active ? "text-mint" : "text-slate-300"}>{active ? (direction === "asc" ? "↑" : "↓") : "↕"}</span>
+      </button>
+    </th>
   );
+}
+
+function sortRows(rows: Ingredient[], key: IngredientSortKey, direction: SortDirection) {
+  return [...rows].sort((a, b) => {
+    const aValue = a[key];
+    const bValue = b[key];
+    const result = typeof aValue === "string"
+      ? aValue.localeCompare(String(bValue))
+      : Number(aValue) - Number(bValue);
+    return direction === "asc" ? result : -result;
+  });
+}
+
+function round(value: number) {
+  return Math.round(Number(value) * 10) / 10;
 }
 
 function IngredientModal({ ingredient, onClose, onSaved }: { ingredient: Ingredient | null; onClose: () => void; onSaved: () => void }) {
