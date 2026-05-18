@@ -1,6 +1,7 @@
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type DayType = "rest" | "gym" | "interval_bike" | "endurance_bike";
-export type TimingType = "pre_workout" | "post_workout" | "neutral" | "evening_recovery";
+export type TimingType = "pre_workout" | "post_workout" | "neutral" | "evening_recovery" | "carb_support";
+export type Intensity = "low" | "medium" | "high";
 
 export type Ingredient = {
   id: string;
@@ -54,4 +55,51 @@ export type MacroTotals = {
 export type Stats = {
   ingredients: number;
   recipes: number;
+};
+
+export type Activity = {
+  id: string;
+  user_id?: string;
+  date: string;
+  activity_type: DayType;
+  start_time: string | null;
+  duration_minutes: number | null;
+  intensity: Intensity | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ActivityPayload = Omit<Activity, "id" | "user_id" | "created_at" | "updated_at">;
+
+export type DailyMealSelection = {
+  id: string;
+  date: string;
+  meal_type: MealType;
+  selected_recipe_id: string | null;
+  recipe_name?: string | null;
+  created_at: string;
+};
+
+export type MacroTarget = {
+  id: string;
+  day_type: DayType;
+  kcal_min: number | null;
+  kcal_max: number | null;
+  protein_min: number | null;
+  carbs_min: number | null;
+  carbs_max: number | null;
+  fat_min: number | null;
+  fat_max: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MacroTargetPayload = Omit<MacroTarget, "id" | "created_at" | "updated_at">;
+
+export type MealTimingContext = Record<MealType, TimingType>;
+
+export type RecommendedRecipe = Recipe & {
+  recommendationScore: number;
+  recommendationReasons: string[];
 };

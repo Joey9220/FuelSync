@@ -3,7 +3,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { Landing } from "./pages/Landing";
 import { Dashboard } from "./pages/Dashboard";
+import { DailySuggestions } from "./pages/DailySuggestions";
 import { Ingredients } from "./pages/Ingredients";
+import { Planner } from "./pages/Planner";
 import { Recipes } from "./pages/Recipes";
 import { Settings } from "./pages/Settings";
 
@@ -22,6 +24,8 @@ export default function App() {
     <AppShell>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/planner" element={<Planner />} />
+        <Route path="/today" element={<DailySuggestions />} />
         <Route path="/ingredients" element={<Ingredients />} />
         <Route path="/recipes" element={<Recipes />} />
         <Route path="/settings" element={<Settings />} />

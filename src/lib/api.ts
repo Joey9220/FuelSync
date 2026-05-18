@@ -1,4 +1,14 @@
-import type { Ingredient, Recipe, Stats } from "../types";
+import type {
+  Activity,
+  ActivityPayload,
+  DailyMealSelection,
+  Ingredient,
+  MacroTarget,
+  MacroTargetPayload,
+  MealType,
+  Recipe,
+  Stats,
+} from "../types";
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -49,5 +59,32 @@ export function createApiClient(getToken: () => Promise<string>) {
         (data) => data.recipe,
       ),
     deleteRecipe: (id: string) => request<void>(`/recipes?id=${id}`, { method: "DELETE" }),
+    getActivities: (params: { date?: string; from?: string; to?: string } = {}) => {
+      const query = new URLSearchParams();
+      if (params.date) query.set("date", params.date);
+      if (params.from) query.set("from", params.from);
+      if (params.to) query.set("to", params.to);
+      return request<{ activities: Activity[] }>(`/activities${query.size ? `?${query}` : ""}`).then((data) => data.activities);
+    },
+    createActivity: (payload: ActivityPayload) =>
+      request<{ activity: Activity }>("/activities", { method: "POST", body: JSON.stringify(payload) }).then(
+        (data) => data.activity,
+      ),
+    updateActivity: (id: string, payload: ActivityPayload) =>
+      request<{ activity: Activity }>(`/activities?id=${id}`, { method: "PUT", body: JSON.stringify(payload) }).then(
+        (data) => data.activity,
+      ),
+    deleteActivity: (id: string) => request<void>(`/activities?id=${id}`, { method: "DELETE" }),
+    getMealSelections: (date: string) =>
+      request<{ selections: DailyMealSelection[] }>(`/meal-selections?date=${date}`).then((data) => data.selections),
+    saveMealSelection: (payload: { date: string; meal_type: MealType; selected_recipe_id: string | null }) =>
+      request<{ selection: DailyMealSelection }>("/meal-selections", { method: "PUT", body: JSON.stringify(payload) }).then(
+        (data) => data.selection,
+      ),
+    getMacroTargets: () => request<{ targets: MacroTarget[] }>("/macro-targets").then((data) => data.targets),
+    saveMacroTarget: (payload: MacroTargetPayload) =>
+      request<{ target: MacroTarget }>("/macro-targets", { method: "PUT", body: JSON.stringify(payload) }).then(
+        (data) => data.target,
+      ),
   };
 }

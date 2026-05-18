@@ -2,7 +2,7 @@
 
 FuelSync is the first foundation version of a nutrition planning app.
 
-This phase includes:
+V1 included:
 
 - React + Vite + TypeScript frontend
 - Tailwind CSS app shell
@@ -14,10 +14,20 @@ This phase includes:
 - Recipe ingredient rows
 - Automatic macro totals
 
-Not included yet:
+V2 adds:
 
-- Planner
-- Meal recommendations
+- Weekly training planner
+- Activity scheduling
+- Day priority engine
+- Timing context engine
+- Meal recommendation scoring
+- Daily meal selection
+- Macro target settings
+- Dashboard V2
+
+Still not included:
+
+- Long-range meal planner automation
 - AI
 
 ## Live Project
@@ -70,7 +80,8 @@ All database operations go through Netlify Functions. `DATABASE_URL` must only e
 .
 |-- database/
 |   |-- migrations/
-|   |   `-- 001_initial_schema.sql
+|   |   |-- 001_initial_schema.sql
+|   |   `-- 002_planner_foundation.sql
 |   `-- seed.sql
 |-- netlify/
 |   `-- functions/
@@ -80,16 +91,21 @@ All database operations go through Netlify Functions. `DATABASE_URL` must only e
 |       |   |-- http.ts
 |       |   |-- netlify-types.ts
 |       |   `-- validation.ts
+|       |-- activities.ts
 |       |-- ingredients.ts
+|       |-- macro-targets.ts
+|       |-- meal-selections.ts
 |       |-- recipes.ts
 |       `-- stats.ts
 |-- scripts/
-|   `-- seed-examples.mjs
+|   |-- seed-examples.mjs
+|   `-- seed-macro-targets.mjs
 |-- src/
 |   |-- components/
 |   |-- hooks/
 |   |-- lib/
 |   |-- pages/
+|   |-- services/
 |   |-- App.tsx
 |   |-- main.tsx
 |   |-- styles.css
@@ -166,7 +182,7 @@ The backend validates the Auth0 JWT in every Netlify Function and uses the token
 
 ## Neon Setup
 
-The initial schema has already been applied to Neon.
+The V1 and V2 schemas have already been applied to Neon.
 
 Created tables:
 
@@ -174,12 +190,16 @@ Created tables:
 ingredients
 recipes
 recipe_ingredients
+activities
+daily_meal_selections
+macro_targets
 ```
 
-Migration file:
+Migration files:
 
 ```text
 database/migrations/001_initial_schema.sql
+database/migrations/002_planner_foundation.sql
 ```
 
 Seed data has already been inserted for:
@@ -193,12 +213,14 @@ Current seeded data:
 ```text
 10 ingredients
 3 recipes
+4 macro target profiles
 ```
 
 Reusable seed script:
 
 ```bash
 DATABASE_URL="postgresql://..." SEED_USER_ID="auth0|..." node scripts/seed-examples.mjs
+DATABASE_URL="postgresql://..." SEED_USER_ID="auth0|..." node scripts/seed-macro-targets.mjs
 ```
 
 On Windows PowerShell:
@@ -207,6 +229,7 @@ On Windows PowerShell:
 $env:DATABASE_URL="postgresql://..."
 $env:SEED_USER_ID="auth0|..."
 node scripts/seed-examples.mjs
+node scripts/seed-macro-targets.mjs
 ```
 
 ## Local Development
@@ -266,6 +289,9 @@ The frontend calls:
 - `GET/POST/PUT/DELETE /api/ingredients`
 - `GET/POST/PUT/DELETE /api/recipes`
 - `GET /api/stats`
+- `GET/POST/PUT/DELETE /api/activities`
+- `GET/PUT /api/meal-selections`
+- `GET/PUT /api/macro-targets`
 
 Each Netlify Function:
 
@@ -274,6 +300,50 @@ Each Netlify Function:
 - uses `sub` as `user_id`
 - only reads or modifies data for that user
 - never trusts `user_id` from the frontend
+
+## V2 App Routes
+
+```text
+/              Dashboard V2
+/planner       Weekly activity planner
+/today         Daily meal suggestions and selections
+/ingredients  Ingredient CRUD
+/recipes      Recipe CRUD
+/settings     Account and macro targets
+```
+
+## Recommendation Logic
+
+Pure service modules live in:
+
+```text
+src/services/dayPriority.ts
+src/services/timingEngine.ts
+src/services/recommendations.ts
+```
+
+Day type rules:
+
+- `interval_bike` overrides everything
+- `endurance_bike` overrides `gym` when duration is at least 120 minutes
+- `gym` overrides `rest`
+- `rest` is used when no activity exists
+
+Timing rules:
+
+- Morning training: breakfast pre-workout, lunch post-workout
+- Afternoon training: lunch pre-workout, dinner post-workout
+- Evening training: lunch carb support, snack pre-workout, dinner post-workout
+- No training: all meals neutral
+
+The recommendation engine scores recipe candidates by:
+
+- meal type
+- day type fit
+- timing fit
+- macro fit
+- carb suitability
+- fat suitability
 
 ## Git Workflow
 
