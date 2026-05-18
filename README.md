@@ -1,95 +1,212 @@
 # FuelSync
 
-FuelSync is the first foundation version of a nutrition planning app. This phase includes Auth0 login, a React app shell, ingredient CRUD, recipe CRUD, recipe ingredient rows, macro totals, Neon PostgreSQL schema, and Netlify Functions as the only database access layer.
+FuelSync is the first foundation version of a nutrition planning app.
 
-The planner, recommendations, and AI features are intentionally not included.
+This phase includes:
+
+- React + Vite + TypeScript frontend
+- Tailwind CSS app shell
+- Auth0 authentication
+- Netlify Functions backend API
+- Neon PostgreSQL database
+- Ingredient CRUD
+- Recipe CRUD
+- Recipe ingredient rows
+- Automatic macro totals
+
+Not included yet:
+
+- Planner
+- Meal recommendations
+- AI
+
+## Live Project
+
+GitHub:
+
+```text
+https://github.com/Joey9220/FuelSync.git
+```
+
+Netlify:
+
+```text
+https://fuelsync01.netlify.app
+```
+
+Current Auth0 tenant:
+
+```text
+dev-3x6nxzjmzbjy70fy.eu.auth0.com
+```
+
+Current Auth0 SPA client ID:
+
+```text
+pNTZ21UuCu8B4a9hX3fL4cxBdFRpivE3
+```
+
+Current Auth0 API audience:
+
+```text
+https://fuelsync-api
+```
+
+Seeded Auth0 user id:
+
+```text
+auth0|69fcebc830f4b48abbba5fb8
+```
+
+## Architecture Rule
+
+The React frontend must never connect directly to Neon.
+
+All database operations go through Netlify Functions. `DATABASE_URL` must only exist server-side in Netlify environment variables or local server-side tooling.
 
 ## File Structure
 
 ```text
 .
-├─ database/
-│  ├─ migrations/
-│  │  └─ 001_initial_schema.sql
-│  └─ seed.sql
-├─ netlify/
-│  └─ functions/
-│     ├─ _shared/
-│     │  ├─ auth.ts
-│     │  ├─ db.ts
-│     │  ├─ http.ts
-│     │  ├─ netlify-types.ts
-│     │  └─ validation.ts
-│     ├─ ingredients.ts
-│     ├─ recipes.ts
-│     └─ stats.ts
-├─ src/
-│  ├─ components/
-│  ├─ hooks/
-│  ├─ lib/
-│  ├─ pages/
-│  ├─ App.tsx
-│  ├─ main.tsx
-│  ├─ styles.css
-│  ├─ types.ts
-│  └─ vite-env.d.ts
-├─ .env.example
-├─ netlify.toml
-├─ package.json
-├─ tailwind.config.ts
-└─ vite.config.ts
+|-- database/
+|   |-- migrations/
+|   |   `-- 001_initial_schema.sql
+|   `-- seed.sql
+|-- netlify/
+|   `-- functions/
+|       |-- _shared/
+|       |   |-- auth.ts
+|       |   |-- db.ts
+|       |   |-- http.ts
+|       |   |-- netlify-types.ts
+|       |   `-- validation.ts
+|       |-- ingredients.ts
+|       |-- recipes.ts
+|       `-- stats.ts
+|-- scripts/
+|   `-- seed-examples.mjs
+|-- src/
+|   |-- components/
+|   |-- hooks/
+|   |-- lib/
+|   |-- pages/
+|   |-- App.tsx
+|   |-- main.tsx
+|   |-- styles.css
+|   |-- types.ts
+|   `-- vite-env.d.ts
+|-- .env.example
+|-- netlify.toml
+|-- package.json
+|-- tailwind.config.ts
+`-- vite.config.ts
 ```
 
-## Environment Variables
+## Netlify Environment Variables
 
-Frontend `.env`:
+Paste these into Netlify under:
 
-```bash
-VITE_AUTH0_DOMAIN=your-tenant.eu.auth0.com
-VITE_AUTH0_CLIENT_ID=your-auth0-spa-client-id
+```text
+Site configuration -> Environment variables -> Import from .env
+```
+
+```env
+VITE_AUTH0_DOMAIN=dev-3x6nxzjmzbjy70fy.eu.auth0.com
+VITE_AUTH0_CLIENT_ID=pNTZ21UuCu8B4a9hX3fL4cxBdFRpivE3
 VITE_AUTH0_AUDIENCE=https://fuelsync-api
 VITE_API_BASE_URL=/api
-```
-
-Netlify server-side environment:
-
-```bash
-DATABASE_URL=postgresql://...
-AUTH0_DOMAIN=your-tenant.eu.auth0.com
+AUTH0_DOMAIN=dev-3x6nxzjmzbjy70fy.eu.auth0.com
 AUTH0_AUDIENCE=https://fuelsync-api
+DATABASE_URL=your-neon-postgresql-connection-string
 ```
 
-`DATABASE_URL` must only be configured in Netlify or local server-side dev tooling. Do not expose it with a `VITE_` prefix.
+After changing any `VITE_` variable in Netlify, trigger:
+
+```text
+Clear cache and deploy site
+```
+
+Vite embeds `VITE_` values at build time.
 
 ## Auth0 Setup
 
-1. Create an Auth0 Single Page Application.
-2. Add allowed callback URLs:
-   - `http://localhost:8888`
-   - your Netlify production URL
-3. Add allowed logout URLs with the same values.
-4. Add allowed web origins with the same values.
-5. Create an API in Auth0 and use its identifier as `VITE_AUTH0_AUDIENCE` and `AUTH0_AUDIENCE`.
-6. Use the Auth0 domain and SPA client ID in the frontend environment variables.
+Auth0 application type:
 
-The backend validates the Auth0 JWT in every Netlify Function and uses `sub` as the user-owned `user_id`.
+```text
+Single Page Application
+```
+
+Allowed Callback URLs:
+
+```text
+https://fuelsync01.netlify.app, http://localhost:8888, http://127.0.0.1:5173
+```
+
+Allowed Logout URLs:
+
+```text
+https://fuelsync01.netlify.app, http://localhost:8888, http://127.0.0.1:5173
+```
+
+Allowed Web Origins:
+
+```text
+https://fuelsync01.netlify.app, http://localhost:8888, http://127.0.0.1:5173
+```
+
+Auth0 API:
+
+```text
+Name: FuelSync API
+Identifier: https://fuelsync-api
+Signing Algorithm: RS256
+```
+
+The backend validates the Auth0 JWT in every Netlify Function and uses the token `sub` claim as `user_id`.
 
 ## Neon Setup
 
-1. Create a Neon project and database.
-2. Copy the pooled or direct PostgreSQL connection string into Netlify as `DATABASE_URL`.
-3. Run the migration:
+The initial schema has already been applied to Neon.
 
-```bash
-psql "$DATABASE_URL" -f database/migrations/001_initial_schema.sql
+Created tables:
+
+```text
+ingredients
+recipes
+recipe_ingredients
 ```
 
-4. Optional seed data:
+Migration file:
 
-Edit `database/seed.sql` and replace `auth0|replace-me` with your Auth0 user ID, then run:
+```text
+database/migrations/001_initial_schema.sql
+```
+
+Seed data has already been inserted for:
+
+```text
+auth0|69fcebc830f4b48abbba5fb8
+```
+
+Current seeded data:
+
+```text
+10 ingredients
+3 recipes
+```
+
+Reusable seed script:
 
 ```bash
-psql "$DATABASE_URL" -f database/seed.sql
+DATABASE_URL="postgresql://..." SEED_USER_ID="auth0|..." node scripts/seed-examples.mjs
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:DATABASE_URL="postgresql://..."
+$env:SEED_USER_ID="auth0|..."
+node scripts/seed-examples.mjs
 ```
 
 ## Local Development
@@ -102,16 +219,16 @@ npm install
 
 Create `.env` from `.env.example`.
 
-For full local API testing with Netlify Functions, install/use Netlify CLI and run:
-
-```bash
-netlify dev
-```
-
 For frontend-only development:
 
 ```bash
 npm run dev
+```
+
+For full local API testing with Netlify Functions, use Netlify Dev:
+
+```bash
+netlify dev
 ```
 
 Build:
@@ -120,12 +237,55 @@ Build:
 npm run build
 ```
 
+## Netlify Deployment
+
+Netlify is connected to GitHub:
+
+```text
+Joey9220/FuelSync
+```
+
+Build settings:
+
+```text
+Build command: npm run build
+Publish directory: dist
+Functions directory: netlify/functions
+```
+
+`netlify.toml` also redirects:
+
+```text
+/api/* -> /.netlify/functions/:splat
+```
+
 ## API Boundary
 
-The React frontend never connects to Neon. It calls:
+The frontend calls:
 
 - `GET/POST/PUT/DELETE /api/ingredients`
 - `GET/POST/PUT/DELETE /api/recipes`
 - `GET /api/stats`
 
-Netlify redirects `/api/*` to `/.netlify/functions/*`. Each function validates the JWT, extracts `sub`, and scopes every query by `user_id`.
+Each Netlify Function:
+
+- validates the Auth0 JWT
+- extracts `sub`
+- uses `sub` as `user_id`
+- only reads or modifies data for that user
+- never trusts `user_id` from the frontend
+
+## Git Workflow
+
+Updates are not pushed to GitHub automatically just because files change locally.
+
+The normal flow is:
+
+```bash
+git status
+git add .
+git commit -m "Describe the change"
+git push
+```
+
+If you ask me to change code or docs, I can also commit and push the update for you in the same turn.
