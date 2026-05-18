@@ -84,8 +84,8 @@ export function Ingredients() {
       ) : (
         <Card className="p-0">
           <div className="overflow-x-auto">
-            <table className="min-w-[840px] w-full border-collapse text-left text-xs">
-              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+            <table className="min-w-[760px] w-full border-collapse text-left text-[11px]">
+              <thead className="bg-slate-100 text-[10px] uppercase tracking-wide text-slate-700">
                 <tr>
                   <SortableHeader label="Name" active={sortKey === "name"} direction={sortDirection} onClick={() => updateSort("name")} />
                   <SortableHeader label="kcal" active={sortKey === "kcal"} direction={sortDirection} onClick={() => updateSort("kcal")} align="right" />
@@ -94,27 +94,27 @@ export function Ingredients() {
                   <SortableHeader label="C" active={sortKey === "carbs_g"} direction={sortDirection} onClick={() => updateSort("carbs_g")} align="right" />
                   <SortableHeader label="Default qty" active={sortKey === "default_quantity"} direction={sortDirection} onClick={() => updateSort("default_quantity")} align="right" />
                   <SortableHeader label="Unit" active={sortKey === "unit"} direction={sortDirection} onClick={() => updateSort("unit")} />
-                  <th className="border border-slate-200 px-3 py-2 text-right">Actions</th>
+                  <th className="border border-slate-300 px-2 py-1.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedIngredients.map((ingredient) => (
                   <tr key={ingredient.id} className="hover:bg-slate-50">
-                    <td className="border border-slate-200 px-3 py-2 font-black text-ink">{ingredient.name}</td>
-                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.kcal)}</td>
-                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.protein_g)}</td>
-                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.fat_g)}</td>
-                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.carbs_g)}</td>
-                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.default_quantity)}</td>
-                    <td className="border border-slate-200 px-3 py-2">{ingredient.unit}</td>
-                    <td className="border border-slate-200 px-3 py-2">
+                    <td className="border border-slate-300 px-2 py-1.5 font-black text-ink">{ingredient.name}</td>
+                    <MacroCell tone="kcal" value={ingredient.kcal} />
+                    <MacroCell tone="protein" value={ingredient.protein_g} />
+                    <MacroCell tone="fat" value={ingredient.fat_g} />
+                    <MacroCell tone="carbs" value={ingredient.carbs_g} />
+                    <td className="border border-slate-300 px-2 py-1.5 text-right tabular-nums">{round(ingredient.default_quantity)}</td>
+                    <td className="border border-slate-300 px-2 py-1.5">{ingredient.unit}</td>
+                    <td className="border border-slate-300 px-2 py-1.5">
                       <div className="flex justify-end gap-1">
-                        <Button aria-label="Edit" variant="ghost" className="h-9 w-9 px-0" icon={<Edit2 size={16} />} onClick={() => setEditing(ingredient)} />
+                        <Button aria-label="Edit" variant="ghost" className="h-9 w-9 px-0" icon={<Edit2 />} onClick={() => setEditing(ingredient)} />
                         <Button
                           aria-label="Delete"
                           variant="ghost"
                           className="h-9 w-9 px-0 text-red-600"
-                          icon={<Trash2 size={16} />}
+                          icon={<Trash2 />}
                           onClick={async () => {
                             if (!window.confirm(`Delete ${ingredient.name}?`)) return;
                             await api.deleteIngredient(ingredient.id);
@@ -159,12 +159,27 @@ function SortableHeader({
   onClick: () => void;
 }) {
   return (
-    <th className={`border border-slate-200 px-3 py-2 ${align === "right" ? "text-right" : "text-left"}`}>
+    <th className={`border border-slate-300 px-2 py-1.5 ${align === "right" ? "text-right" : "text-left"}`}>
       <button className="inline-flex items-center gap-1 font-black hover:text-ink" onClick={onClick} type="button">
         {label}
-        <span className={active ? "text-mint" : "text-slate-300"}>{active ? (direction === "asc" ? "↑" : "↓") : "↕"}</span>
+        <span className={active ? "text-mint" : "text-slate-500"}>{active ? (direction === "asc" ? "↑" : "↓") : "↕"}</span>
       </button>
     </th>
+  );
+}
+
+function MacroCell({ tone, value }: { tone: "kcal" | "protein" | "fat" | "carbs"; value: number }) {
+  const tones = {
+    kcal: "bg-amber-50 text-amber-950",
+    protein: "bg-emerald-50 text-emerald-950",
+    fat: "bg-rose-50 text-rose-950",
+    carbs: "bg-sky-50 text-sky-950",
+  };
+
+  return (
+    <td className={`border border-slate-300 px-2 py-1.5 text-right font-black tabular-nums ${tones[tone]}`}>
+      {round(value)}
+    </td>
   );
 }
 
