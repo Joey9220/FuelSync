@@ -84,8 +84,8 @@ export function Ingredients() {
       ) : (
         <Card className="p-0">
           <div className="overflow-x-auto">
-            <table className="min-w-[840px] w-full border-collapse text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <table className="min-w-[840px] w-full border-collapse text-left text-xs">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                 <tr>
                   <SortableHeader label="Name" active={sortKey === "name"} direction={sortDirection} onClick={() => updateSort("name")} />
                   <SortableHeader label="kcal" active={sortKey === "kcal"} direction={sortDirection} onClick={() => updateSort("kcal")} align="right" />
@@ -94,20 +94,20 @@ export function Ingredients() {
                   <SortableHeader label="C" active={sortKey === "carbs_g"} direction={sortDirection} onClick={() => updateSort("carbs_g")} align="right" />
                   <SortableHeader label="Default qty" active={sortKey === "default_quantity"} direction={sortDirection} onClick={() => updateSort("default_quantity")} align="right" />
                   <SortableHeader label="Unit" active={sortKey === "unit"} direction={sortDirection} onClick={() => updateSort("unit")} />
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="border border-slate-200 px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {sortedIngredients.map((ingredient) => (
                   <tr key={ingredient.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-black text-ink">{ingredient.name}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.kcal)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.protein_g)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.fat_g)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.carbs_g)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{round(ingredient.default_quantity)}</td>
-                    <td className="px-4 py-3">{ingredient.unit}</td>
-                    <td className="px-4 py-3">
+                    <td className="border border-slate-200 px-3 py-2 font-black text-ink">{ingredient.name}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.kcal)}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.protein_g)}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.fat_g)}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.carbs_g)}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(ingredient.default_quantity)}</td>
+                    <td className="border border-slate-200 px-3 py-2">{ingredient.unit}</td>
+                    <td className="border border-slate-200 px-3 py-2">
                       <div className="flex justify-end gap-1">
                         <Button aria-label="Edit" variant="ghost" className="h-9 w-9 px-0" icon={<Edit2 size={16} />} onClick={() => setEditing(ingredient)} />
                         <Button
@@ -159,7 +159,7 @@ function SortableHeader({
   onClick: () => void;
 }) {
   return (
-    <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"}`}>
+    <th className={`border border-slate-200 px-3 py-2 ${align === "right" ? "text-right" : "text-left"}`}>
       <button className="inline-flex items-center gap-1 font-black hover:text-ink" onClick={onClick} type="button">
         {label}
         <span className={active ? "text-mint" : "text-slate-300"}>{active ? (direction === "asc" ? "↑" : "↓") : "↕"}</span>

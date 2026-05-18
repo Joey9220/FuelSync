@@ -98,10 +98,10 @@ export function Recipes() {
       ) : (
         <Card className="p-0">
           <div className="overflow-x-auto">
-            <table className="min-w-[1180px] w-full border-collapse text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <table className="min-w-[1180px] w-full border-collapse text-left text-xs">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="w-10 px-3 py-3"></th>
+                  <th className="w-10 border border-slate-200 px-2 py-2"></th>
                   <SortableHeader label="Name" active={sortKey === "name"} direction={sortDirection} onClick={() => updateSort("name")} />
                   <SortableHeader label="Suitable day type" active={sortKey === "day"} direction={sortDirection} onClick={() => updateSort("day")} />
                   <SortableHeader label="Suitable timing" active={sortKey === "timing"} direction={sortDirection} onClick={() => updateSort("timing")} />
@@ -111,28 +111,28 @@ export function Recipes() {
                   <SortableHeader label="F" active={sortKey === "fat_g"} direction={sortDirection} onClick={() => updateSort("fat_g")} align="right" />
                   <SortableHeader label="C" active={sortKey === "carbs_g"} direction={sortDirection} onClick={() => updateSort("carbs_g")} align="right" />
                   <SortableHeader label="Weight" active={sortKey === "weight"} direction={sortDirection} onClick={() => updateSort("weight")} align="right" />
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="border border-slate-200 px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {visibleRecipes.map((recipe) => {
                   const isExpanded = expanded === recipe.id;
                   return (
                     <Fragment key={recipe.id}>
                       <tr className="cursor-pointer hover:bg-slate-50" onClick={() => setExpanded(isExpanded ? null : recipe.id)}>
-                        <td className="px-3 py-3">
+                        <td className="border border-slate-200 px-2 py-2">
                           {isExpanded ? <ChevronDown size={16} className="text-mint" /> : <ChevronRight size={16} className="text-slate-400" />}
                         </td>
-                        <td className="px-4 py-3 font-black text-ink">{recipe.name}</td>
-                        <td className="px-4 py-3">{recipe.suitable_day_types.map(label).join(", ") || "-"}</td>
-                        <td className="px-4 py-3">{recipe.suitable_timing.map(label).join(", ") || "-"}</td>
-                        <td className="px-4 py-3">{recipe.tags?.join(", ") || "-"}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{round(recipe.totals.kcal)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{round(recipe.totals.protein_g)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{round(recipe.totals.fat_g)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{round(recipe.totals.carbs_g)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{round(recipeWeight(recipe))}</td>
-                        <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
+                        <td className="border border-slate-200 px-3 py-2 font-black text-ink">{recipe.name}</td>
+                        <td className="border border-slate-200 px-3 py-2">{recipe.suitable_day_types.map(label).join(", ") || "-"}</td>
+                        <td className="border border-slate-200 px-3 py-2">{recipe.suitable_timing.map(label).join(", ") || "-"}</td>
+                        <td className="border border-slate-200 px-3 py-2">{recipe.tags?.join(", ") || "-"}</td>
+                        <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipe.totals.kcal)}</td>
+                        <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipe.totals.protein_g)}</td>
+                        <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipe.totals.fat_g)}</td>
+                        <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipe.totals.carbs_g)}</td>
+                        <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(recipeWeight(recipe))}</td>
+                        <td className="border border-slate-200 px-3 py-2" onClick={(event) => event.stopPropagation()}>
                           <div className="flex justify-end gap-1">
                             <Button aria-label="Edit" variant="ghost" className="h-9 w-9 px-0" icon={<Edit2 size={16} />} onClick={() => setEditing(recipe)} />
                             <Button
@@ -151,21 +151,45 @@ export function Recipes() {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-slate-50">
-                          <td></td>
-                          <td colSpan={10} className="px-4 py-4">
-                            <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
-                              <div>
-                                <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Ingredients</div>
-                                <div className="flex flex-wrap gap-2">
-                                  {recipe.ingredients.map((item) => (
-                                    <span key={item.id || item.ingredient_id} className="rounded-full bg-white px-3 py-1 text-sm font-bold text-slate-700 ring-1 ring-slate-200">
-                                      {item.name} · {item.quantity} {item.unit}
-                                    </span>
-                                  ))}
-                                </div>
+                          <td className="border border-slate-200"></td>
+                          <td colSpan={10} className="border border-slate-200 p-3">
+                            <div className="grid gap-3 xl:grid-cols-[1fr_260px]">
+                              <div className="overflow-x-auto">
+                                <table className="min-w-[720px] w-full border-collapse bg-white text-xs">
+                                  <thead className="bg-white text-[11px] uppercase tracking-wide text-slate-500">
+                                    <tr>
+                                      <th className="border border-slate-200 px-3 py-2 text-left">Ingredient</th>
+                                      <th className="border border-slate-200 px-3 py-2 text-right">Quantity</th>
+                                      <th className="border border-slate-200 px-3 py-2 text-left">Unit</th>
+                                      <th className="border border-slate-200 px-3 py-2 text-right">kcal</th>
+                                      <th className="border border-slate-200 px-3 py-2 text-right">P</th>
+                                      <th className="border border-slate-200 px-3 py-2 text-right">F</th>
+                                      <th className="border border-slate-200 px-3 py-2 text-right">C</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {recipe.ingredients.map((item) => {
+                                      const totals = ingredientTotals(item);
+                                      return (
+                                        <tr key={item.id || item.ingredient_id} className="hover:bg-slate-50">
+                                          <td className="border border-slate-200 px-3 py-2 font-bold">{item.name}</td>
+                                          <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(Number(item.quantity))}</td>
+                                          <td className="border border-slate-200 px-3 py-2">{item.unit}</td>
+                                          <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(totals.kcal)}</td>
+                                          <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(totals.protein_g)}</td>
+                                          <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(totals.fat_g)}</td>
+                                          <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(totals.carbs_g)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
                                 {recipe.preparation_notes && <p className="mt-3 text-sm text-slate-600">{recipe.preparation_notes}</p>}
                               </div>
-                              <MacroBadges totals={recipe.totals} />
+                              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                <div className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">Recipe totals</div>
+                                <MacroBadges totals={recipe.totals} />
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -208,7 +232,7 @@ function SortableHeader({
   onClick: () => void;
 }) {
   return (
-    <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"}`}>
+    <th className={`border border-slate-200 px-3 py-2 ${align === "right" ? "text-right" : "text-left"}`}>
       <button className="inline-flex items-center gap-1 font-black hover:text-ink" onClick={onClick} type="button">
         {label}
         <span className={active ? "text-mint" : "text-slate-300"}>{active ? (direction === "asc" ? "↑" : "↓") : "↕"}</span>
@@ -453,6 +477,16 @@ function recipeSortValue(recipe: Recipe, key: RecipeSortKey) {
 
 function recipeWeight(recipe: Recipe) {
   return recipe.ingredients.reduce((total, item) => total + Number(item.quantity || 0), 0);
+}
+
+function ingredientTotals(item: RecipeIngredient) {
+  const scale = Number(item.quantity || 0) / Number(item.default_quantity || item.quantity || 1);
+  return {
+    kcal: Number(item.kcal || 0) * scale,
+    protein_g: Number(item.protein_g || 0) * scale,
+    fat_g: Number(item.fat_g || 0) * scale,
+    carbs_g: Number(item.carbs_g || 0) * scale,
+  };
 }
 
 function wildcardMatch(value: string, query: string) {
