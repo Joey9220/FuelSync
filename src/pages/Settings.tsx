@@ -43,11 +43,32 @@ const defaults: Record<TargetGoal, Record<DayType, TargetNumbers>> = {
   },
 };
 
+const dayTypeEnergyAdjustment: Record<DayType, number> = {
+  rest: -150,
+  gym: 250,
+  interval_bike: 450,
+  endurance_bike: 700,
+};
+
+const goalDefaults: Record<TargetGoal, { weeklyRate: number; protein: number; fat: number }> = {
+  recomp: { weeklyRate: -0.1, protein: 2.1, fat: 0.8 },
+  fat_loss: { weeklyRate: -0.5, protein: 2.2, fat: 0.75 },
+  maintenance: { weeklyRate: 0, protein: 1.8, fat: 0.8 },
+  cut: { weeklyRate: -0.75, protein: 2.3, fat: 0.7 },
+  lean_bulk: { weeklyRate: 0.25, protein: 1.9, fat: 0.9 },
+};
+
 export function Settings() {
   const { user, logout } = useAuth0();
   const api = useApi();
   const [selectedGoal, setSelectedGoal] = useState<TargetGoal>("maintenance");
   const [targets, setTargets] = useState<Record<TargetGoal, Record<DayType, MacroTargetPayload>>>(() => initialTargets([]));
+  const [calculator, setCalculator] = useState({
+    currentWeight: "",
+    height: "",
+    goalWeight: "",
+    goalDate: "",
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +99,37 @@ export function Settings() {
         ...current[selectedGoal],
         [dayType]: { ...current[selectedGoal][dayType], [key]: value === "" ? null : Number(value) },
       },
+    }));
+  }
+
+  function updateCalculator(key: keyof typeof calculator, value: string) {
+    setCalculator((current) => ({ ...current, [key]: value }));
+  }
+
+  function applyCalculatedTargets() {
+    const calculated = calculateTargets({
+      selectedGoal,
+      currentWeight: Number(calculator.currentWeight),
+      height: Number(calculator.height),
+      goalWeight: Number(calculator.goalWeight),
+      goalDate: calculator.goalDate,
+    });
+
+    if (!calculated) {
+      setError("Enter current weight, height, goal weight and a future goal date.");
+      return;
+    }
+
+    setError("");
+    setTargets((current) => ({
+      ...current,
+      [selectedGoal]: dayTypes.reduce(
+        (acc, dayType) => {
+          acc[dayType] = { target_goal: selectedGoal, day_type: dayType, ...calculated[dayType] };
+          return acc;
+        },
+        {} as Record<DayType, MacroTargetPayload>,
+      ),
     }));
   }
 
@@ -133,6 +185,56 @@ export function Settings() {
             </p>
           </Card>
 
+          <Card>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="text-lg font-black">Auto calculate targets</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Estimates macro ranges for the selected goal across all day types.
+                </p>
+              </div>
+              <Button type="button" variant="secondary" onClick={applyCalculatedTargets}>
+                Calculate and fill targets
+              </Button>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <Field label="Current weight kg">
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.1"
+                  value={calculator.currentWeight}
+                  onChange={(event) => updateCalculator("currentWeight", event.target.value)}
+                />
+              </Field>
+              <Field label="Height cm">
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.1"
+                  value={calculator.height}
+                  onChange={(event) => updateCalculator("height", event.target.value)}
+                />
+              </Field>
+              <Field label="Goal weight kg">
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.1"
+                  value={calculator.goalWeight}
+                  onChange={(event) => updateCalculator("goalWeight", event.target.value)}
+                />
+              </Field>
+              <Field label="Goal date">
+                <Input
+                  type="date"
+                  value={calculator.goalDate}
+                  onChange={(event) => updateCalculator("goalDate", event.target.value)}
+                />
+              </Field>
+            </div>
+          </Card>
+
           {dayTypes.map((dayType) => (
             <Card key={`${selectedGoal}-${dayType}`}>
               <h2 className="text-lg font-black">{label(dayType)}</h2>
@@ -152,6 +254,67 @@ export function Settings() {
       )}
     </div>
   );
+}
+
+function calculateTargets({
+  selectedGoal,
+  currentWeight,
+  height,
+  goalWeight,
+  goalDate,
+}: {
+  selectedGoal: TargetGoal;
+  currentWeight: number;
+  height: number;
+  goalWeight: number;
+  goalDate: string;
+}): Record<DayType, TargetNumbers> | null {
+  if (!currentWeight || !height || !goalWeight || !goalDate) return null;
+  const daysUntilGoal = Math.ceil((new Date(goalDate).getTime() - Date.now()) / 86400000);
+  if (daysUntilGoal <= 0) return null;
+
+  const weeksUntilGoal = daysUntilGoal / 7;
+  const requestedWeeklyRate = (goalWeight - currentWeight) / weeksUntilGoal;
+  const goalProfile = goalDefaults[selectedGoal];
+  const weeklyRate = selectedGoal === "maintenance" || selectedGoal === "recomp"
+    ? goalProfile.weeklyRate
+    : clamp(requestedWeeklyRate, -0.9, 0.45);
+
+  const leanMassEstimate = currentWeight * 0.82;
+  const bmr = 10 * currentWeight + 6.25 * height - 5 * 35 + 5;
+  const maintenance = bmr * 1.45;
+  const goalDelta = (weeklyRate * 7700) / 7;
+  const protein = Math.round(currentWeight * goalProfile.protein);
+  const fatBase = Math.round(currentWeight * goalProfile.fat);
+
+  return dayTypes.reduce(
+    (acc, dayType) => {
+      const kcalCenter = Math.round(maintenance + goalDelta + dayTypeEnergyAdjustment[dayType]);
+      const kcalMin = Math.max(1400, kcalCenter - 125);
+      const kcalMax = Math.max(kcalMin + 100, kcalCenter + 125);
+      const fatMin = Math.max(35, fatBase - 10);
+      const fatMax = fatBase + 15;
+      const proteinMin = Math.max(protein, Math.round(leanMassEstimate * 2));
+      const carbsMin = Math.max(40, Math.round((kcalMin - proteinMin * 4 - fatMax * 9) / 4));
+      const carbsMax = Math.max(carbsMin + 30, Math.round((kcalMax - proteinMin * 4 - fatMin * 9) / 4));
+
+      acc[dayType] = {
+        kcal_min: kcalMin,
+        kcal_max: kcalMax,
+        protein_min: proteinMin,
+        carbs_min: carbsMin,
+        carbs_max: carbsMax,
+        fat_min: fatMin,
+        fat_max: fatMax,
+      };
+      return acc;
+    },
+    {} as Record<DayType, TargetNumbers>,
+  );
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function NumberField({ label: labelText, value, onChange }: { label: string; value: number | null; onChange: (value: string) => void }) {
