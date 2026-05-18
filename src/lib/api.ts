@@ -8,6 +8,8 @@ import type {
   MealType,
   Recipe,
   Stats,
+  TargetGoal,
+  UserPreferences,
 } from "../types";
 import { normalizeDateKey } from "./date";
 
@@ -84,10 +86,18 @@ export function createApiClient(getToken: () => Promise<string>) {
       request<{ selection: DailyMealSelection }>("/meal-selections", { method: "PUT", body: JSON.stringify(payload) }).then(
         (data) => data.selection,
       ),
-    getMacroTargets: () => request<{ targets: MacroTarget[] }>("/macro-targets").then((data) => data.targets),
+    getMacroTargets: (goal?: TargetGoal) =>
+      request<{ targets: MacroTarget[] }>(`/macro-targets${goal ? `?goal=${goal}` : ""}`).then((data) => data.targets),
     saveMacroTarget: (payload: MacroTargetPayload) =>
       request<{ target: MacroTarget }>("/macro-targets", { method: "PUT", body: JSON.stringify(payload) }).then(
         (data) => data.target,
       ),
+    getUserPreferences: () =>
+      request<{ preferences: UserPreferences }>("/user-preferences").then((data) => data.preferences),
+    saveUserPreferences: (payload: UserPreferences) =>
+      request<{ preferences: UserPreferences }>("/user-preferences", {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }).then((data) => data.preferences),
   };
 }

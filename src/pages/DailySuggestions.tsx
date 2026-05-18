@@ -15,7 +15,7 @@ import { useApi } from "../hooks/useApi";
 import { determineDayType } from "../services/dayPriority";
 import { recommendRecipes } from "../services/recommendations";
 import { determineTimingContext } from "../services/timingEngine";
-import type { Activity, DailyMealSelection, MacroTarget, MealType, Recipe } from "../types";
+import type { Activity, DailyMealSelection, MacroTarget, MealType, Recipe, TargetGoal } from "../types";
 
 export function DailySuggestions() {
   const api = useApi();
@@ -24,17 +24,20 @@ export function DailySuggestions() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [selections, setSelections] = useState<DailyMealSelection[]>([]);
   const [targets, setTargets] = useState<MacroTarget[]>([]);
+  const [targetGoal, setTargetGoal] = useState<TargetGoal>("maintenance");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.getActivities({ date }), api.getRecipes(), api.getMealSelections(date), api.getMacroTargets()])
-      .then(([activityRows, recipeRows, selectionRows, targetRows]) => {
+    Promise.all([api.getActivities({ date }), api.getRecipes(), api.getMealSelections(date), api.getUserPreferences()])
+      .then(async ([activityRows, recipeRows, selectionRows, preferences]) => {
+        const targetRows = await api.getMacroTargets(preferences.target_goal);
         setActivities(activityRows);
         setRecipes(recipeRows);
         setSelections(selectionRows);
         setTargets(targetRows);
+        setTargetGoal(preferences.target_goal);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -85,7 +88,7 @@ export function DailySuggestions() {
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-ink p-3 text-white"><CalendarDays size={20} /></div>
                 <div>
-                  <div className="text-sm font-bold text-slate-500">Detected day type</div>
+                  <div className="text-sm font-bold text-slate-500">Detected day type · {label(targetGoal)}</div>
                   <div className="text-2xl font-black">{label(dayType)}</div>
                 </div>
               </div>
@@ -148,6 +151,7 @@ function defaultTarget(dayType: string): MacroTarget {
 
   return {
     id: dayType,
+    target_goal: "maintenance",
     day_type: dayTypes.includes(dayType as never) ? (dayType as never) : "rest",
     ...base,
     created_at: "",

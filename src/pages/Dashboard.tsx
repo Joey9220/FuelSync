@@ -16,7 +16,7 @@ import { useApi } from "../hooks/useApi";
 import { determineDayType } from "../services/dayPriority";
 import { recommendRecipes } from "../services/recommendations";
 import { determineTimingContext } from "../services/timingEngine";
-import type { Activity, DailyMealSelection, MacroTarget, Recipe, Stats } from "../types";
+import type { Activity, DailyMealSelection, MacroTarget, Recipe, Stats, TargetGoal } from "../types";
 
 export function Dashboard() {
   const api = useApi();
@@ -28,6 +28,7 @@ export function Dashboard() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [selections, setSelections] = useState<DailyMealSelection[]>([]);
   const [targets, setTargets] = useState<MacroTarget[]>([]);
+  const [targetGoal, setTargetGoal] = useState<TargetGoal>("maintenance");
   const [quickAdd, setQuickAdd] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -40,15 +41,17 @@ export function Dashboard() {
       api.getActivities({ from: today, to: toDateKey(addDays(new Date(), 6)) }),
       api.getRecipes(),
       api.getMealSelections(today),
-      api.getMacroTargets(),
+      api.getUserPreferences(),
     ])
-      .then(([statsRow, todayRows, weekRows, recipeRows, selectionRows, targetRows]) => {
+      .then(async ([statsRow, todayRows, weekRows, recipeRows, selectionRows, preferences]) => {
+        const targetRows = await api.getMacroTargets(preferences.target_goal);
         setStats(statsRow);
         setActivities(todayRows);
         setWeekActivities(weekRows);
         setRecipes(recipeRows);
         setSelections(selectionRows);
         setTargets(targetRows);
+        setTargetGoal(preferences.target_goal);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -87,7 +90,7 @@ export function Dashboard() {
             <Card className="bg-gradient-to-br from-white to-emerald-50">
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
-                  <div className="text-sm font-bold text-slate-500">Detected day</div>
+                  <div className="text-sm font-bold text-slate-500">Detected day · {label(targetGoal)}</div>
                   <div className="mt-1 text-3xl font-black">{label(dayType)}</div>
                 </div>
                 <StatCard label="Recipes" value={stats?.recipes ?? 0} />

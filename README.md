@@ -23,6 +23,7 @@ V2 adds:
 - Meal recommendation scoring
 - Daily meal selection
 - Macro target settings
+- Goal-specific macro targets
 - Dashboard V2
 
 Still not included:
@@ -213,7 +214,7 @@ Current seeded data:
 ```text
 10 ingredients
 3 recipes
-4 macro target profiles
+20 macro target profiles
 ```
 
 Reusable seed script:
@@ -292,6 +293,7 @@ The frontend calls:
 - `GET/POST/PUT/DELETE /api/activities`
 - `GET/PUT /api/meal-selections`
 - `GET/PUT /api/macro-targets`
+- `GET/PUT /api/user-preferences`
 
 Each Netlify Function:
 
@@ -311,6 +313,18 @@ Each Netlify Function:
 /recipes      Recipe CRUD
 /settings     Account and macro targets
 ```
+
+Macro targets are stored per target goal and day type:
+
+```text
+recomp
+fat_loss
+maintenance
+cut
+lean_bulk
+```
+
+The active target goal is stored in `user_preferences` and is used by the dashboard and daily suggestions.
 
 ## Recommendation Logic
 

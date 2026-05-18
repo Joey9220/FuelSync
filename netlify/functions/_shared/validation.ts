@@ -2,6 +2,7 @@ export const mealTypes = ["breakfast", "lunch", "dinner", "snack"] as const;
 export const dayTypes = ["rest", "gym", "interval_bike", "endurance_bike"] as const;
 export const timingTypes = ["pre_workout", "post_workout", "neutral", "evening_recovery", "carb_support"] as const;
 export const intensityTypes = ["low", "medium", "high"] as const;
+export const targetGoals = ["recomp", "fat_loss", "maintenance", "cut", "lean_bulk"] as const;
 
 type FieldMap = Record<string, unknown>;
 

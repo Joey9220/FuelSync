@@ -2,6 +2,7 @@ export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 export type DayType = "rest" | "gym" | "interval_bike" | "endurance_bike";
 export type TimingType = "pre_workout" | "post_workout" | "neutral" | "evening_recovery" | "carb_support";
 export type Intensity = "low" | "medium" | "high";
+export type TargetGoal = "recomp" | "fat_loss" | "maintenance" | "cut" | "lean_bulk";
 
 export type Ingredient = {
   id: string;
@@ -83,6 +84,7 @@ export type DailyMealSelection = {
 
 export type MacroTarget = {
   id: string;
+  target_goal: TargetGoal;
   day_type: DayType;
   kcal_min: number | null;
   kcal_max: number | null;
@@ -96,6 +98,10 @@ export type MacroTarget = {
 };
 
 export type MacroTargetPayload = Omit<MacroTarget, "id" | "created_at" | "updated_at">;
+
+export type UserPreferences = {
+  target_goal: TargetGoal;
+};
 
 export type MealTimingContext = Record<MealType, TimingType>;
 
