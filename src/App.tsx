@@ -27,8 +27,9 @@ export default function App() {
     <AppShell>
       <WithingsCallbackHandler />
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/withings/callback" element={<Dashboard />} />
+        <Route path="/" element={<DailySuggestions />} />
+        <Route path="/withings/callback" element={<DailySuggestions />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/body" element={<BodyMetrics />} />
         <Route path="/planner" element={<Planner />} />
         <Route path="/today" element={<DailySuggestions />} />
