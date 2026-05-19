@@ -1,9 +1,15 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { requireAuth } from "./_shared/auth";
 import { db } from "./_shared/db";
 import { fail, ok } from "./_shared/http";
 
 const model = "gemini-2.5-flash";
+const geminiApiVersion = "v1beta";
+const Type = {
+  OBJECT: "OBJECT",
+  ARRAY: "ARRAY",
+  STRING: "STRING",
+  NUMBER: "NUMBER",
+};
 const goals = ["body_recomp", "fat_loss", "maintenance", "cut", "lean_bulk"];
 const dayTypes = ["rest", "gym", "endurance_bike", "interval_bike", "mixed"];
 const mealTypes = ["breakfast", "lunch", "dinner", "snack"];
@@ -87,19 +93,32 @@ export const handler = async (event) => {
     if (!apiKey) throw Object.assign(new Error("Gemini API key is not configured."), { statusCode: 500 });
 
     const input = validateInput(JSON.parse(event.body));
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model,
-      contents: buildPrompt(input),
-      config: {
-        responseMimeType: "application/json",
-        responseSchema,
-        temperature: 0.25,
-        maxOutputTokens: 1800,
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/${geminiApiVersion}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema,
+            temperature: 0.25,
+            maxOutputTokens: 1800,
+          },
+        }),
       },
-    });
+    );
 
-    const rawOutput = JSON.parse(response.text || "{}");
+    const geminiResponse = await response.json();
+    if (!response.ok) {
+      throw Object.assign(new Error(geminiResponse.error?.message || "Gemini request failed."), { statusCode: 502 });
+    }
+
+    const responseText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!responseText) throw Object.assign(new Error("Gemini returned an empty response."), { statusCode: 502 });
+
+    const rawOutput = JSON.parse(responseText);
     const output = validateAiNutritionResponse(rawOutput, input);
 
     await saveSnapshot({ userId, input, output }).catch(() => {
