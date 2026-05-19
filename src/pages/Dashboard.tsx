@@ -148,7 +148,7 @@ export function Dashboard() {
               </div>
               <Button variant="secondary" onClick={() => navigate("/body")}>Open</Button>
             </div>
-            <MetricChart metrics={bodyMetrics} metricKey="weight_kg" height={150} />
+            <MetricChart metrics={bodyMetrics} metricKey="weight_kg" height={150} showControls={false} />
           </Card>
 
           <Section title="Today's meal suggestions" action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => navigate("/today")}>Open day</Button>}>
