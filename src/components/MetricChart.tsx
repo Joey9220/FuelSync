@@ -60,20 +60,35 @@ export function MetricChart({
   const rawMax = Math.max(...values);
   const { min, max } = getScale(rawMin, rawMax, scaleMode);
   const range = Math.max(max - min, 0.1);
-  const gridLines = Array.from({ length: 5 }, (_, index) => {
-    const ratio = index / 4;
-    const value = max - range * ratio;
-    const y = 8 + ratio * 84;
+  const horizontalTicks = Array.from({ length: 7 }, (_, index) => {
+    const tickRatio = index / 6;
+    const value = max - range * tickRatio;
+    const y = 8 + tickRatio * 84;
     return { value, y };
   });
-  const verticalLines = Array.from({ length: 4 }, (_, index) => 8 + index * 28);
-  const path = points
-    .map((point, index) => {
-      const x = 8 + (index / (points.length - 1)) * 84;
-      const y = 100 - ((point.value - min) / range) * 84 - 8;
-      return `${index === 0 ? "M" : "L"} ${x} ${y}`;
-    })
-    .join(" ");
+  const verticalTickCount = Math.min(6, points.length);
+  const verticalTicks = Array.from({ length: verticalTickCount }, (_, index) => {
+    const ratio = verticalTickCount === 1 ? 0 : index / (verticalTickCount - 1);
+    const pointIndex = Math.round(ratio * (points.length - 1));
+    return {
+      x: 8 + ratio * 84,
+      date: points[pointIndex].date,
+    };
+  });
+  const pathPoints = points.map((point, index) => ({
+    x: 8 + (index / (points.length - 1)) * 84,
+    y: 100 - ((point.value - min) / range) * 84 - 8,
+    value: point.value,
+  }));
+  const trendPoints = movingAverage(points.map((point) => point.value), Math.min(7, Math.max(3, Math.ceil(points.length / 8)))).map(
+    (value, index) => ({
+      x: 8 + (index / (points.length - 1)) * 84,
+      y: 100 - ((value - min) / range) * 84 - 8,
+      value,
+    }),
+  );
+  const path = toPath(pathPoints);
+  const trendPath = toPath(trendPoints);
 
   return (
     <div>
@@ -101,13 +116,32 @@ export function MetricChart({
       </div>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full rounded-lg border border-slate-300 bg-white" style={{ height }}>
         <rect x="0" y="0" width="100" height="100" fill="#ffffff" />
-        {verticalLines.map((x) => (
-          <line key={x} x1={x} x2={x} y1="8" y2="92" stroke="#e2e8f0" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+        {verticalTicks.map((tick) => (
+          <line key={tick.x} x1={tick.x} x2={tick.x} y1="8" y2="92" stroke="#cbd5e1" strokeWidth="0.7" vectorEffect="non-scaling-stroke" />
         ))}
-        {gridLines.map((line) => (
-          <line key={line.y} x1="8" x2="92" y1={line.y} y2={line.y} stroke="#cbd5e1" strokeWidth="0.65" vectorEffect="non-scaling-stroke" />
+        {horizontalTicks.map((tick) => (
+          <line key={tick.y} x1="8" x2="92" y1={tick.y} y2={tick.y} stroke="#94a3b8" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />
         ))}
-        <path d={path} fill="none" stroke={colors[metricKey]} strokeWidth="2.8" vectorEffect="non-scaling-stroke" />
+        <line x1="8" x2="8" y1="8" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
+        <line x1="8" x2="92" y1="92" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
+        {horizontalTicks.map((tick) => (
+          <text key={`label-${tick.y}`} x="1.8" y={tick.y + 1.1} className="fill-slate-600 text-[3px] font-bold">
+            {formatTickValue(tick.value)}
+          </text>
+        ))}
+        {verticalTicks.map((tick, index) => (
+          <text
+            key={`date-${tick.x}`}
+            x={tick.x}
+            y="98"
+            textAnchor={index === 0 ? "start" : index === verticalTicks.length - 1 ? "end" : "middle"}
+            className="fill-slate-600 text-[3px] font-bold"
+          >
+            {formatDate(tick.date)}
+          </text>
+        ))}
+        <path d={path} fill="none" stroke={colors[metricKey]} strokeOpacity="0.38" strokeWidth="3.2" vectorEffect="non-scaling-stroke" />
+        <path d={trendPath} fill="none" stroke={colors[metricKey]} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-start gap-3 text-[11px] font-semibold text-slate-500">
         <div className="space-y-0.5">
@@ -115,13 +149,27 @@ export function MetricChart({
           <div>{formatAxisValue(min, units[metricKey])}</div>
         </div>
         <div />
-        <div className="flex min-w-36 justify-between gap-4">
-          <span>{formatDate(points[0].date)}</span>
-          <span>{formatDate(points.at(-1)?.date ?? points[0].date)}</span>
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1"><span className="h-0.5 w-4 rounded-full opacity-40" style={{ backgroundColor: colors[metricKey] }} /> Raw</span>
+          <span className="inline-flex items-center gap-1"><span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: colors[metricKey] }} /> Trend</span>
         </div>
       </div>
     </div>
   );
+}
+
+function toPath(points: Array<{ x: number; y: number }>) {
+  return points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+}
+
+function movingAverage(values: number[], windowSize: number) {
+  const halfWindow = Math.floor(windowSize / 2);
+  return values.map((_, index) => {
+    const start = Math.max(0, index - halfWindow);
+    const end = Math.min(values.length, index + halfWindow + 1);
+    const slice = values.slice(start, end);
+    return slice.reduce((sum, value) => sum + value, 0) / slice.length;
+  });
 }
 
 function getScale(rawMin: number, rawMax: number, mode: ScaleMode) {
@@ -148,4 +196,9 @@ function formatDate(value: string) {
 
 function formatAxisValue(value: number, unit: string) {
   return `${round(value)} ${unit}`;
+}
+
+function formatTickValue(value: number) {
+  const rounded = round(value);
+  return Math.abs(rounded) >= 100 ? String(Math.round(rounded)) : String(rounded);
 }
