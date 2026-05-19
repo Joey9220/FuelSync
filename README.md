@@ -138,7 +138,7 @@ AUTH0_AUDIENCE=https://fuelsync-api
 DATABASE_URL=your-neon-postgresql-connection-string
 WITHINGS_CLIENT_ID=your-withings-client-id
 WITHINGS_CLIENT_SECRET=your-withings-client-secret
-WITHINGS_CALLBACK_URL=https://fuelsync01.netlify.app/
+WITHINGS_CALLBACK_URL=https://fuelsync01.netlify.app/withings/callback
 WITHINGS_API_ENDPOINT=https://wbsapi.withings.net
 ```
 
@@ -359,7 +359,7 @@ The Body page supports:
 Withings API callback URL:
 
 ```text
-https://fuelsync01.netlify.app/
+https://fuelsync01.netlify.app/withings/callback
 ```
 
 ## Recommendation Logic

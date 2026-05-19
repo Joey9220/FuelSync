@@ -8,6 +8,12 @@ import "./styles.css";
 const domain = import.meta.env.VITE_AUTH0_DOMAIN;
 const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
 const audience = import.meta.env.VITE_AUTH0_AUDIENCE;
+const params = new URLSearchParams(window.location.search);
+const callbackState = params.get("state");
+const withingsState = window.localStorage.getItem("withings_oauth_state");
+const isWithingsCallback =
+  window.location.pathname === "/withings/callback" ||
+  Boolean(callbackState && (callbackState === withingsState || callbackState.startsWith("withings_")));
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -18,6 +24,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         redirect_uri: window.location.origin,
         audience,
       }}
+      skipRedirectCallback={isWithingsCallback}
       cacheLocation="localstorage"
     >
       <BrowserRouter>

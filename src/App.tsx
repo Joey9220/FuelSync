@@ -28,6 +28,7 @@ export default function App() {
       <WithingsCallbackHandler />
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/withings/callback" element={<Dashboard />} />
         <Route path="/body" element={<BodyMetrics />} />
         <Route path="/planner" element={<Planner />} />
         <Route path="/today" element={<DailySuggestions />} />
@@ -54,11 +55,15 @@ function WithingsCallbackHandler() {
     api.completeWithingsOAuth(code)
       .then(() => {
         window.localStorage.removeItem("withings_oauth_state");
+        window.localStorage.removeItem("withings_oauth_error");
         window.history.replaceState({}, "", "/body");
         window.location.assign("/body");
       })
-      .catch(() => {
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : "Withings connection failed.";
+        window.localStorage.setItem("withings_oauth_error", message);
         window.history.replaceState({}, "", "/body");
+        window.location.assign("/body");
       });
   }, [api]);
 

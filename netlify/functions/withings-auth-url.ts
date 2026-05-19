@@ -10,7 +10,7 @@ export const handler: Handler = async (event) => {
     await requireAuth(event);
 
     const config = withingsConfig();
-    const state = crypto.randomBytes(24).toString("hex");
+    const state = `withings_${crypto.randomBytes(24).toString("hex")}`;
     const params = new URLSearchParams({
       response_type: "code",
       client_id: config.clientId,

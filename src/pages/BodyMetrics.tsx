@@ -43,6 +43,13 @@ export function BodyMetrics() {
 
   useEffect(load, [range]);
 
+  useEffect(() => {
+    const callbackError = window.localStorage.getItem("withings_oauth_error");
+    if (!callbackError) return;
+    setError(callbackError);
+    window.localStorage.removeItem("withings_oauth_error");
+  }, []);
+
   async function connect() {
     const { url, state } = await api.getWithingsAuthUrl();
     window.localStorage.setItem("withings_oauth_state", state);
