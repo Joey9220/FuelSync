@@ -4,10 +4,13 @@ import { AppShell } from "./components/AppShell";
 import { Landing } from "./pages/Landing";
 import { Dashboard } from "./pages/Dashboard";
 import { DailySuggestions } from "./pages/DailySuggestions";
+import { BodyMetrics } from "./pages/BodyMetrics";
 import { Ingredients } from "./pages/Ingredients";
 import { Planner } from "./pages/Planner";
 import { Recipes } from "./pages/Recipes";
 import { Settings } from "./pages/Settings";
+import { useEffect } from "react";
+import { useApi } from "./hooks/useApi";
 
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth0();
@@ -22,8 +25,10 @@ export default function App() {
 
   return (
     <AppShell>
+      <WithingsCallbackHandler />
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/body" element={<BodyMetrics />} />
         <Route path="/planner" element={<Planner />} />
         <Route path="/today" element={<DailySuggestions />} />
         <Route path="/ingredients" element={<Ingredients />} />
@@ -33,4 +38,29 @@ export default function App() {
       </Routes>
     </AppShell>
   );
+}
+
+function WithingsCallbackHandler() {
+  const api = useApi();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    if (!code || !state) return;
+    const expectedState = window.localStorage.getItem("withings_oauth_state");
+    if (expectedState && expectedState !== state) return;
+
+    api.completeWithingsOAuth(code)
+      .then(() => {
+        window.localStorage.removeItem("withings_oauth_state");
+        window.history.replaceState({}, "", "/body");
+        window.location.assign("/body");
+      })
+      .catch(() => {
+        window.history.replaceState({}, "", "/body");
+      });
+  }, [api]);
+
+  return null;
 }

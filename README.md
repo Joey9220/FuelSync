@@ -135,6 +135,10 @@ VITE_API_BASE_URL=/api
 AUTH0_DOMAIN=dev-3x6nxzjmzbjy70fy.eu.auth0.com
 AUTH0_AUDIENCE=https://fuelsync-api
 DATABASE_URL=your-neon-postgresql-connection-string
+WITHINGS_CLIENT_ID=your-withings-client-id
+WITHINGS_CLIENT_SECRET=your-withings-client-secret
+WITHINGS_CALLBACK_URL=https://fuelsync01.netlify.app/
+WITHINGS_API_ENDPOINT=https://wbsapi.withings.net
 ```
 
 After changing any `VITE_` variable in Netlify, trigger:
@@ -294,6 +298,10 @@ The frontend calls:
 - `GET/PUT /api/meal-selections`
 - `GET/PUT /api/macro-targets`
 - `GET/PUT /api/user-preferences`
+- `GET /api/withings-auth-url`
+- `POST /api/withings-oauth`
+- `POST /api/withings-sync`
+- `GET /api/body-metrics`
 
 Each Netlify Function:
 
@@ -309,6 +317,7 @@ Each Netlify Function:
 /              Dashboard V2
 /planner       Weekly activity planner
 /today         Daily meal suggestions and selections
+/body         Withings body metrics and graphs
 /ingredients  Ingredient CRUD
 /recipes      Recipe CRUD
 /settings     Account and macro targets

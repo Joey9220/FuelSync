@@ -5,6 +5,7 @@ import { ActivityFormModal } from "../components/ActivityFormModal";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { MacroBadges } from "../components/MacroBadges";
+import { MetricChart } from "../components/MetricChart";
 import { ProgressBar } from "../components/ProgressBar";
 import { RecipeSuggestionCard } from "../components/RecipeSuggestionCard";
 import { Section } from "../components/Section";
@@ -16,7 +17,7 @@ import { useApi } from "../hooks/useApi";
 import { determineDayType } from "../services/dayPriority";
 import { recommendRecipes } from "../services/recommendations";
 import { determineTimingContext } from "../services/timingEngine";
-import type { Activity, DailyMealSelection, MacroTarget, Recipe, Stats, TargetGoal } from "../types";
+import type { Activity, BodyMetric, DailyMealSelection, MacroTarget, Recipe, Stats, TargetGoal } from "../types";
 
 export function Dashboard() {
   const api = useApi();
@@ -28,6 +29,7 @@ export function Dashboard() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [selections, setSelections] = useState<DailyMealSelection[]>([]);
   const [targets, setTargets] = useState<MacroTarget[]>([]);
+  const [bodyMetrics, setBodyMetrics] = useState<BodyMetric[]>([]);
   const [targetGoal, setTargetGoal] = useState<TargetGoal>("maintenance");
   const [quickAdd, setQuickAdd] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -42,8 +44,9 @@ export function Dashboard() {
       api.getRecipes(),
       api.getMealSelections(today),
       api.getUserPreferences(),
+      api.getBodyMetrics(30),
     ])
-      .then(async ([statsRow, todayRows, weekRows, recipeRows, selectionRows, preferences]) => {
+      .then(async ([statsRow, todayRows, weekRows, recipeRows, selectionRows, preferences, bodyMetricRows]) => {
         const targetRows = await api.getMacroTargets(preferences.target_goal);
         setStats(statsRow);
         setActivities(todayRows);
@@ -52,6 +55,7 @@ export function Dashboard() {
         setSelections(selectionRows);
         setTargets(targetRows);
         setTargetGoal(preferences.target_goal);
+        setBodyMetrics(bodyMetricRows.metrics);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -136,7 +140,18 @@ export function Dashboard() {
             </Card>
           </div>
 
-          <Section title="Today’s meal suggestions" action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => navigate("/today")}>Open day</Button>}>
+          <Card>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="font-black">Body trend</div>
+                <p className="text-sm text-slate-500">Last 30 days from Withings</p>
+              </div>
+              <Button variant="secondary" onClick={() => navigate("/body")}>Open</Button>
+            </div>
+            <MetricChart metrics={bodyMetrics} metricKey="weight_kg" height={150} />
+          </Card>
+
+          <Section title="Today's meal suggestions" action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => navigate("/today")}>Open day</Button>}>
             <div className="grid gap-3 lg:grid-cols-4">
               {todaySuggestions.map((recipe) => (
                 <RecipeSuggestionCard

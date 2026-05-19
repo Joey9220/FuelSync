@@ -109,3 +109,19 @@ export type RecommendedRecipe = Recipe & {
   recommendationScore: number;
   recommendationReasons: string[];
 };
+
+export type BodyMetric = {
+  id: string;
+  measured_at: string;
+  weight_kg: number | null;
+  fat_mass_kg: number | null;
+  fat_percentage: number | null;
+  muscle_mass_kg: number | null;
+  bone_mass_kg: number | null;
+  fat_free_mass_kg: number | null;
+  source: string;
+};
+
+export type WithingsConnectionStatus = {
+  connected: boolean;
+};

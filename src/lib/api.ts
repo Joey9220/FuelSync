@@ -1,6 +1,7 @@
 import type {
   Activity,
   ActivityPayload,
+  BodyMetric,
   DailyMealSelection,
   Ingredient,
   MacroTarget,
@@ -10,6 +11,7 @@ import type {
   Stats,
   TargetGoal,
   UserPreferences,
+  WithingsConnectionStatus,
 } from "../types";
 import { normalizeDateKey } from "./date";
 
@@ -99,5 +101,28 @@ export function createApiClient(getToken: () => Promise<string>) {
         method: "PUT",
         body: JSON.stringify(payload),
       }).then((data) => data.preferences),
+    getWithingsAuthUrl: () => request<{ url: string; state: string }>("/withings-auth-url"),
+    completeWithingsOAuth: (code: string) =>
+      request<WithingsConnectionStatus>("/withings-oauth", { method: "POST", body: JSON.stringify({ code }) }),
+    syncWithings: () => request<{ synced: number }>("/withings-sync", { method: "POST" }),
+    getBodyMetrics: (days = 30) =>
+      request<{ metrics: BodyMetric[]; connected: boolean }>(`/body-metrics?days=${days}`).then((data) => ({
+        connected: data.connected,
+        metrics: data.metrics.map((metric) => ({
+          ...metric,
+          weight_kg: nullableNumber(metric.weight_kg),
+          fat_mass_kg: nullableNumber(metric.fat_mass_kg),
+          fat_percentage: nullableNumber(metric.fat_percentage),
+          muscle_mass_kg: nullableNumber(metric.muscle_mass_kg),
+          bone_mass_kg: nullableNumber(metric.bone_mass_kg),
+          fat_free_mass_kg: nullableNumber(metric.fat_free_mass_kg),
+        })),
+      })),
   };
+}
+
+function nullableNumber(value: unknown) {
+  if (value === null || value === undefined) return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
 }
