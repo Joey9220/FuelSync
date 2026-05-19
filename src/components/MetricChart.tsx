@@ -43,9 +43,16 @@ export function MetricChart({
   showControls?: boolean;
 }) {
   const [scaleMode, setScaleMode] = useState<ScaleMode>("auto");
+  const [tooltip, setTooltip] = useState<{
+    pointIndex: number;
+    clientX: number;
+    clientY: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
   const points = metrics
-    .map((metric) => ({ date: metric.measured_at, value: metric[metricKey] }))
-    .filter((point): point is { date: string; value: number } => point.value !== null);
+    .map((metric) => ({ date: metric.measured_at, value: metric[metricKey], metric }))
+    .filter((point): point is { date: string; value: number; metric: BodyMetric } => point.value !== null);
 
   if (points.length < 2) {
     return (
@@ -89,6 +96,24 @@ export function MetricChart({
   );
   const path = toPath(pathPoints);
   const trendPath = toPath(trendPoints);
+  const activePoint = tooltip ? pathPoints[tooltip.pointIndex] : null;
+  const activeMetric = tooltip ? points[tooltip.pointIndex] : null;
+
+  function updateTooltip(clientX: number, clientY: number, target: EventTarget | null) {
+    const svg = target instanceof SVGElement ? target.closest("svg") : null;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const xPercent = ((clientX - rect.left) / rect.width) * 100;
+    const plotRatio = clamp((xPercent - 8) / 84, 0, 1);
+    const pointIndex = Math.round(plotRatio * (points.length - 1));
+    setTooltip({
+      pointIndex,
+      clientX,
+      clientY,
+      offsetX: clientX - rect.left,
+      offsetY: clientY - rect.top,
+    });
+  }
 
   return (
     <div>
@@ -114,35 +139,78 @@ export function MetricChart({
           </div>
         )}
       </div>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full rounded-lg border border-slate-300 bg-white" style={{ height }}>
-        <rect x="0" y="0" width="100" height="100" fill="#ffffff" />
-        {verticalTicks.map((tick) => (
-          <line key={tick.x} x1={tick.x} x2={tick.x} y1="8" y2="92" stroke="#cbd5e1" strokeWidth="0.7" vectorEffect="non-scaling-stroke" />
-        ))}
-        {horizontalTicks.map((tick) => (
-          <line key={tick.y} x1="8" x2="92" y1={tick.y} y2={tick.y} stroke="#94a3b8" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />
-        ))}
-        <line x1="8" x2="8" y1="8" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
-        <line x1="8" x2="92" y1="92" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
-        {horizontalTicks.map((tick) => (
-          <text key={`label-${tick.y}`} x="1.8" y={tick.y + 1.1} className="fill-slate-600 text-[3px] font-bold">
-            {formatTickValue(tick.value)}
-          </text>
-        ))}
-        {verticalTicks.map((tick, index) => (
-          <text
-            key={`date-${tick.x}`}
-            x={tick.x}
-            y="98"
-            textAnchor={index === 0 ? "start" : index === verticalTicks.length - 1 ? "end" : "middle"}
-            className="fill-slate-600 text-[3px] font-bold"
+      <div className="relative">
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="w-full cursor-crosshair rounded-lg border border-slate-300 bg-white"
+          style={{ height }}
+          onMouseMove={(event) => updateTooltip(event.clientX, event.clientY, event.currentTarget)}
+          onMouseLeave={() => setTooltip(null)}
+          onTouchMove={(event) => {
+            const touch = event.touches[0];
+            if (touch) updateTooltip(touch.clientX, touch.clientY, event.currentTarget);
+          }}
+          onTouchEnd={() => setTooltip(null)}
+        >
+          <rect x="0" y="0" width="100" height="100" fill="#ffffff" />
+          {verticalTicks.map((tick) => (
+            <line key={tick.x} x1={tick.x} x2={tick.x} y1="8" y2="92" stroke="#cbd5e1" strokeWidth="0.7" vectorEffect="non-scaling-stroke" />
+          ))}
+          {horizontalTicks.map((tick) => (
+            <line key={tick.y} x1="8" x2="92" y1={tick.y} y2={tick.y} stroke="#94a3b8" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />
+          ))}
+          <line x1="8" x2="8" y1="8" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
+          <line x1="8" x2="92" y1="92" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
+          {horizontalTicks.map((tick) => (
+            <text key={`label-${tick.y}`} x="1.8" y={tick.y + 1.1} className="fill-slate-600 text-[3px] font-bold">
+              {formatTickValue(tick.value)}
+            </text>
+          ))}
+          {verticalTicks.map((tick, index) => (
+            <text
+              key={`date-${tick.x}`}
+              x={tick.x}
+              y="98"
+              textAnchor={index === 0 ? "start" : index === verticalTicks.length - 1 ? "end" : "middle"}
+              className="fill-slate-600 text-[3px] font-bold"
+            >
+              {formatDate(tick.date)}
+            </text>
+          ))}
+          <path d={path} fill="none" stroke={colors[metricKey]} strokeOpacity="0.38" strokeWidth="3.2" vectorEffect="non-scaling-stroke" />
+          <path d={trendPath} fill="none" stroke={colors[metricKey]} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+          {activePoint && (
+            <>
+              <line x1={activePoint.x} x2={activePoint.x} y1="8" y2="92" stroke="#0f172a" strokeOpacity="0.55" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+              <circle cx={activePoint.x} cy={activePoint.y} r="1.3" fill="#ffffff" stroke={colors[metricKey]} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+            </>
+          )}
+        </svg>
+        {tooltip && activeMetric && (
+          <div
+            className="pointer-events-none absolute z-10 min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-lg"
+            style={{
+              left: tooltip.offsetX,
+              top: tooltip.offsetY,
+              transform: `translate(${tooltip.clientX > window.innerWidth - 180 ? "-105%" : "12px"}, ${
+                tooltip.offsetY < 70 ? "12px" : "-105%"
+              })`,
+            }}
           >
-            {formatDate(tick.date)}
-          </text>
-        ))}
-        <path d={path} fill="none" stroke={colors[metricKey]} strokeOpacity="0.38" strokeWidth="3.2" vectorEffect="non-scaling-stroke" />
-        <path d={trendPath} fill="none" stroke={colors[metricKey]} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-      </svg>
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">{formatLongDate(activeMetric.date)}</div>
+            <div className="mt-1 text-sm text-slate-950">
+              {labels[metricKey]}: {round(activeMetric.value)} {units[metricKey]}
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-600">
+              <TooltipMetric label="Weight" value={activeMetric.metric.weight_kg} unit="kg" />
+              <TooltipMetric label="Fat mass" value={activeMetric.metric.fat_mass_kg} unit="kg" />
+              <TooltipMetric label="Fat" value={activeMetric.metric.fat_percentage} unit="%" />
+              <TooltipMetric label="Muscle" value={activeMetric.metric.muscle_mass_kg} unit="kg" />
+            </div>
+          </div>
+        )}
+      </div>
       <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-start gap-3 text-[11px] font-semibold text-slate-500">
         <div className="space-y-0.5">
           <div>{formatAxisValue(max, units[metricKey])}</div>
@@ -154,6 +222,15 @@ export function MetricChart({
           <span className="inline-flex items-center gap-1"><span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: colors[metricKey] }} /> Trend</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TooltipMetric({ label, value, unit }: { label: string; value: number | null; unit: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span>{label}</span>
+      <span className="text-slate-900">{value == null ? "-" : `${round(value)} ${unit}`}</span>
     </div>
   );
 }
@@ -194,6 +271,10 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
+function formatLongDate(value: string) {
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(value));
+}
+
 function formatAxisValue(value: number, unit: string) {
   return `${round(value)} ${unit}`;
 }
@@ -201,4 +282,8 @@ function formatAxisValue(value: number, unit: string) {
 function formatTickValue(value: number) {
   const rounded = round(value);
   return Math.abs(rounded) >= 100 ? String(Math.round(rounded)) : String(rounded);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
