@@ -1,6 +1,8 @@
 import type {
   Activity,
   ActivityPayload,
+  AiNutritionCoachInput,
+  AiNutritionCoachSuggestion,
   BodyMetricsResponse,
   BodyMetric,
   DailyMealSelection,
@@ -102,6 +104,11 @@ export function createApiClient(getToken: () => Promise<string>) {
         method: "PUT",
         body: JSON.stringify(payload),
       }).then((data) => data.preferences),
+    getAiNutritionCoachSuggestion: (payload: AiNutritionCoachInput) =>
+      request<{ suggestion: AiNutritionCoachSuggestion; model: string }>("/aiNutritionCoach", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
     getWithingsAuthUrl: () => request<{ url: string; state: string }>("/withings-auth-url"),
     completeWithingsOAuth: (code: string) =>
       request<WithingsConnectionStatus>("/withings-oauth", { method: "POST", body: JSON.stringify({ code }) }),

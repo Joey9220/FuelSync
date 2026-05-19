@@ -140,6 +140,7 @@ WITHINGS_CLIENT_ID=your-withings-client-id
 WITHINGS_CLIENT_SECRET=your-withings-client-secret
 WITHINGS_CALLBACK_URL=https://fuelsync01.netlify.app/withings/callback
 WITHINGS_API_ENDPOINT=https://wbsapi.withings.net
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
 After changing any `VITE_` variable in Netlify, trigger:
@@ -303,6 +304,7 @@ The frontend calls:
 - `POST /api/withings-oauth`
 - `POST /api/withings-sync`
 - `GET /api/body-metrics`
+- `POST /api/aiNutritionCoach`
 
 Each Netlify Function:
 
@@ -360,6 +362,30 @@ Withings API callback URL:
 
 ```text
 https://fuelsync01.netlify.app/withings/callback
+```
+
+## AI Nutrition Coach
+
+FuelSync includes a controlled Gemini advisory layer on the Today page.
+
+The flow is:
+
+```text
+Frontend -> Netlify Function -> Gemini API -> validation layer -> frontend
+```
+
+The Gemini key must only be configured server-side:
+
+```text
+GEMINI_API_KEY
+```
+
+The AI coach can suggest macro adjustments, meal timing advice, warnings, and reasoning. It does not auto-save changes. The user must explicitly click `Apply suggested targets`.
+
+AI recommendation snapshots can be stored in:
+
+```text
+ai_recommendation_snapshots
 ```
 
 ## Recommendation Logic

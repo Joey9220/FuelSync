@@ -131,3 +131,78 @@ export type BodyMetricsResponse = {
   connected: boolean;
   last_synced_at: string | null;
 };
+
+export type AiCoachGoal = "body_recomp" | "fat_loss" | "maintenance" | "cut" | "lean_bulk";
+export type AiCoachDayType = DayType | "mixed";
+
+export type AiNutritionCoachInput = {
+  goal: AiCoachGoal;
+  dayType: AiCoachDayType;
+  workout: {
+    type: string;
+    startTime: string | null;
+    durationMinutes: number | null;
+    intensity: "low" | "moderate" | "high" | null;
+  };
+  currentTargets: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  selectedMeals: Array<{
+    mealType: MealType;
+    recipeId: string | null;
+    recipeName: string;
+    kcal: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  }>;
+  availableRecipes: Array<{
+    id: string;
+    name: string;
+    mealType: MealType;
+    kcal: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    tags: string[];
+  }>;
+  userPreferences: {
+    dietaryRestrictions: string[];
+    preferredMealComplexity: "low" | "medium" | "high" | null;
+  };
+};
+
+export type AiNutritionCoachSuggestion = {
+  summary: string;
+  macroSuggestion: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  macroDelta: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  mealTimingAdvice: {
+    preWorkout: string | null;
+    intraWorkout: string | null;
+    postWorkout: string | null;
+    general: string;
+  };
+  mealSuggestions: Array<{
+    mealType: MealType;
+    recipeId: string | null;
+    recipeName: string;
+    reason: string;
+    fitScore: number;
+  }>;
+  warnings: string[];
+  reasoning: string[];
+  confidence: "low" | "medium" | "high";
+};

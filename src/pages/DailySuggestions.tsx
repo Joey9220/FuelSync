@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActivityFormModal } from "../components/ActivityFormModal";
+import { AiNutritionCoachPanel } from "../components/AiNutritionCoachPanel";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Field, Input } from "../components/FormField";
@@ -17,7 +18,19 @@ import { useApi } from "../hooks/useApi";
 import { determineDayType } from "../services/dayPriority";
 import { recommendRecipes } from "../services/recommendations";
 import { determineTimingContext } from "../services/timingEngine";
-import type { Activity, DailyMealSelection, MacroTarget, MealType, Recipe, RecommendedRecipe, TargetGoal } from "../types";
+import type {
+  Activity,
+  AiCoachDayType,
+  AiCoachGoal,
+  AiNutritionCoachInput,
+  AiNutritionCoachSuggestion,
+  DailyMealSelection,
+  MacroTarget,
+  MealType,
+  Recipe,
+  RecommendedRecipe,
+  TargetGoal,
+} from "../types";
 
 export function DailySuggestions() {
   const api = useApi();
@@ -79,6 +92,19 @@ export function DailySuggestions() {
   const planTotals = addMacroTotals(planRecipes.map((recipe) => recipe.totals));
   const hasTargets = targets.length > 0;
   const hasAnyRecommendation = mealTypes.some((mealType) => recommendations[mealType].length > 0);
+  const aiCoachInput = useMemo(
+    () =>
+      buildAiCoachInput({
+        activities,
+        dayType,
+        dayLabel,
+        targetGoal,
+        target,
+        selections,
+        recipes,
+      }),
+    [activities, dayType, dayLabel, targetGoal, target, selections, recipes],
+  );
 
   async function selectRecipe(mealType: MealType, recipeId: string) {
     const optimistic = {
@@ -107,6 +133,22 @@ export function DailySuggestions() {
     } finally {
       setSavingPlan(false);
     }
+  }
+
+  async function applyAiTargets(suggestion: AiNutritionCoachSuggestion) {
+    await api.saveMacroTarget({
+      target_goal: targetGoal,
+      day_type: dayType,
+      kcal_min: Math.max(0, Math.round(suggestion.macroSuggestion.calories * 0.95)),
+      kcal_max: Math.max(0, Math.round(suggestion.macroSuggestion.calories * 1.05)),
+      protein_min: Math.max(0, Math.round(suggestion.macroSuggestion.protein)),
+      carbs_min: Math.max(0, Math.round(suggestion.macroSuggestion.carbs * 0.9)),
+      carbs_max: Math.max(0, Math.round(suggestion.macroSuggestion.carbs * 1.1)),
+      fat_min: Math.max(0, Math.round(suggestion.macroSuggestion.fat * 0.9)),
+      fat_max: Math.max(0, Math.round(suggestion.macroSuggestion.fat * 1.1)),
+    });
+    const targetRows = await api.getMacroTargets(targetGoal);
+    setTargets(targetRows);
   }
 
   const toggleSection = (key: keyof typeof openSections) =>
@@ -177,6 +219,12 @@ export function DailySuggestions() {
               onAction={() => navigate("/recipes")}
             />
           )}
+
+          <AiNutritionCoachPanel
+            input={aiCoachInput}
+            canGenerate={hasTargets && recipes.length > 0}
+            onApplyTargets={applyAiTargets}
+          />
 
           <Collapsible title="Recommended meal plan" open={openSections.meals} onToggle={() => toggleSection("meals")}>
             {!hasAnyRecommendation ? (
@@ -381,6 +429,82 @@ function getDisplayDayType(activities: Activity[], dayType: string) {
   const activityTypes = new Set(activities.map((activity) => activity.activity_type).filter((type) => type !== "rest"));
   if (activityTypes.size > 1 && dayType !== "interval_bike") return "mixed";
   return label(dayType);
+}
+
+function buildAiCoachInput({
+  activities,
+  dayType,
+  dayLabel,
+  targetGoal,
+  target,
+  selections,
+  recipes,
+}: {
+  activities: Activity[];
+  dayType: AiCoachDayType;
+  dayLabel: string;
+  targetGoal: TargetGoal;
+  target: MacroTarget;
+  selections: DailyMealSelection[];
+  recipes: Recipe[];
+}): AiNutritionCoachInput {
+  const primaryWorkout = activities[0];
+  const selectedMeals = selections
+    .map((selection) => {
+      const recipe = recipes.find((item) => item.id === selection.selected_recipe_id);
+      if (!recipe) return null;
+      return {
+        mealType: selection.meal_type,
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        kcal: Math.round(recipe.totals.kcal),
+        protein: Math.round(recipe.totals.protein_g),
+        carbs: Math.round(recipe.totals.carbs_g),
+        fat: Math.round(recipe.totals.fat_g),
+      };
+    })
+    .filter((meal): meal is NonNullable<typeof meal> => Boolean(meal));
+
+  return {
+    goal: mapGoal(targetGoal),
+    dayType: dayLabel === "mixed" ? "mixed" : dayType,
+    workout: {
+      type: primaryWorkout?.activity_type ?? dayType,
+      startTime: primaryWorkout?.start_time ?? null,
+      durationMinutes: primaryWorkout?.duration_minutes ?? null,
+      intensity: mapIntensity(primaryWorkout?.intensity ?? null),
+    },
+    currentTargets: {
+      calories: target.kcal_max ?? target.kcal_min ?? 0,
+      protein: target.protein_min ?? 0,
+      carbs: target.carbs_max ?? target.carbs_min ?? 0,
+      fat: target.fat_max ?? target.fat_min ?? 0,
+    },
+    selectedMeals,
+    availableRecipes: recipes.slice(0, 40).map((recipe) => ({
+      id: recipe.id,
+      name: recipe.name,
+      mealType: recipe.meal_type,
+      kcal: Math.round(recipe.totals.kcal),
+      protein: Math.round(recipe.totals.protein_g),
+      carbs: Math.round(recipe.totals.carbs_g),
+      fat: Math.round(recipe.totals.fat_g),
+      tags: recipe.tags ?? [],
+    })),
+    userPreferences: {
+      dietaryRestrictions: [],
+      preferredMealComplexity: null,
+    },
+  };
+}
+
+function mapGoal(goal: TargetGoal): AiCoachGoal {
+  return goal === "recomp" ? "body_recomp" : goal;
+}
+
+function mapIntensity(intensity: Activity["intensity"]): "low" | "moderate" | "high" | null {
+  if (intensity === "medium") return "moderate";
+  return intensity;
 }
 
 function defaultTarget(dayType: string): MacroTarget {
