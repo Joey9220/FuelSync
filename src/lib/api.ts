@@ -1,6 +1,7 @@
 import type {
   Activity,
   ActivityPayload,
+  BodyMetricsResponse,
   BodyMetric,
   DailyMealSelection,
   Ingredient,
@@ -104,10 +105,11 @@ export function createApiClient(getToken: () => Promise<string>) {
     getWithingsAuthUrl: () => request<{ url: string; state: string }>("/withings-auth-url"),
     completeWithingsOAuth: (code: string) =>
       request<WithingsConnectionStatus>("/withings-oauth", { method: "POST", body: JSON.stringify({ code }) }),
-    syncWithings: () => request<{ synced: number }>("/withings-sync", { method: "POST" }),
+    syncWithings: (days = 370) => request<{ synced: number; days: number }>(`/withings-sync?days=${days}`, { method: "POST" }),
     getBodyMetrics: (days = 30) =>
-      request<{ metrics: BodyMetric[]; connected: boolean }>(`/body-metrics?days=${days}`).then((data) => ({
+      request<BodyMetricsResponse>(`/body-metrics?days=${days}`).then((data) => ({
         connected: data.connected,
+        last_synced_at: data.last_synced_at,
         metrics: data.metrics.map((metric) => ({
           ...metric,
           weight_kg: nullableNumber(metric.weight_kg),

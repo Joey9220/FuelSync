@@ -25,6 +25,7 @@ V2 adds:
 - Macro target settings
 - Goal-specific macro targets
 - Dashboard V2
+- Withings body metrics sync
 
 Still not included:
 
@@ -334,6 +335,32 @@ lean_bulk
 ```
 
 The active target goal is stored in `user_preferences` and is used by the dashboard and daily suggestions.
+
+## Withings Body Metrics
+
+FuelSync connects to Withings through Netlify Functions only. The frontend never receives or stores the Withings client secret.
+
+Body metrics are stored in Neon in:
+
+```text
+withings_connections
+body_metrics
+```
+
+The Body page supports:
+
+- Connect or reconnect Withings
+- Normal sync for the latest year
+- Sync all history with a 10-year lookback
+- Last synced status
+- Date ranges: 1w, 2w, 1m, 3m, 6m, 1y, all
+- Charts and table rows for weight, fat mass, fat percentage, muscle mass, bone mass, and fat-free mass
+
+Withings API callback URL:
+
+```text
+https://fuelsync01.netlify.app/
+```
 
 ## Recommendation Logic
 

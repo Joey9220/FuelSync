@@ -125,3 +125,9 @@ export type BodyMetric = {
 export type WithingsConnectionStatus = {
   connected: boolean;
 };
+
+export type BodyMetricsResponse = {
+  metrics: BodyMetric[];
+  connected: boolean;
+  last_synced_at: string | null;
+};

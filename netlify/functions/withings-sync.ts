@@ -32,7 +32,9 @@ export const handler: Handler = async (event) => {
     const sql = db();
     const accessToken = await getValidWithingsAccessToken(sql, userId);
     const config = withingsConfig();
-    const startDate = event.queryStringParameters?.startdate || String(Math.floor(Date.now() / 1000) - 86400 * 370);
+    const days = Math.min(parsePositiveInteger(event.queryStringParameters?.days, 370), 3650);
+    const startDate =
+      event.queryStringParameters?.startdate || String(Math.floor(Date.now() / 1000) - 86400 * days);
 
     const response = await fetch(`${config.apiEndpoint}/measure`, {
       method: "POST",
@@ -76,11 +78,23 @@ export const handler: Handler = async (event) => {
       `;
     }
 
-    return ok({ synced: metrics.length });
+    await sql`
+      update withings_connections
+      set last_synced_at = now()
+      where user_id = ${userId}
+    `;
+
+    return ok({ synced: metrics.length, days });
   } catch (error) {
     return fail(error);
   }
 };
+
+function parsePositiveInteger(value: string | undefined, fallback: number) {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
 
 function parseMeasureGroups(groups: any[]): MetricRow[] {
   return groups.map((group) => {

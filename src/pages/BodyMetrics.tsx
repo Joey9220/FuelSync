@@ -1,4 +1,4 @@
-import { Activity, RefreshCw, Scale } from "lucide-react";
+import { Activity, Clock3, Database, RefreshCw, Scale } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
@@ -21,18 +21,21 @@ export function BodyMetrics() {
   const [range, setRange] = useState(30);
   const [metrics, setMetrics] = useState<BodyMetric[]>([]);
   const [connected, setConnected] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [historySyncing, setHistorySyncing] = useState(false);
   const [error, setError] = useState("");
 
   const latest = metrics.at(-1);
 
-  const load = () => {
+  const load = (selectedRange = range) => {
     setLoading(true);
-    api.getBodyMetrics(range)
+    api.getBodyMetrics(selectedRange)
       .then((data) => {
         setMetrics(data.metrics);
         setConnected(data.connected);
+        setLastSyncedAt(data.last_synced_at);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -46,16 +49,30 @@ export function BodyMetrics() {
     window.location.assign(url);
   }
 
-  async function sync() {
+  async function sync(days = 370) {
     setSyncing(true);
     setError("");
     try {
-      await api.syncWithings();
+      await api.syncWithings(days);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sync Withings.");
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function syncAllHistory() {
+    setHistorySyncing(true);
+    setError("");
+    try {
+      await api.syncWithings(3650);
+      setRange(3650);
+      load(3650);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not sync Withings history.");
+    } finally {
+      setHistorySyncing(false);
     }
   }
 
@@ -72,8 +89,16 @@ export function BodyMetrics() {
           <Button variant="secondary" icon={<Scale />} onClick={connect}>
             {connected ? "Reconnect" : "Connect"}
           </Button>
-          <Button icon={<RefreshCw />} onClick={sync} disabled={!connected || syncing}>
+          <Button icon={<RefreshCw />} onClick={() => sync()} disabled={!connected || syncing || historySyncing}>
             {syncing ? "Syncing..." : "Sync"}
+          </Button>
+          <Button
+            variant="secondary"
+            icon={<Database />}
+            onClick={syncAllHistory}
+            disabled={!connected || syncing || historySyncing}
+          >
+            {historySyncing ? "Syncing..." : "Sync all history"}
           </Button>
         </div>
       </header>
@@ -88,6 +113,25 @@ export function BodyMetrics() {
             <MetricTile label="Muscle" value={latest?.muscle_mass_kg} unit="kg" />
           </div>
 
+          <Card className="border-emerald-100 bg-emerald-50/60">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-white p-2 text-mint shadow-sm"><Clock3 size={20} /></div>
+                <div>
+                  <div className="text-sm font-black text-slate-900">Withings sync status</div>
+                  <div className="text-sm font-semibold text-slate-600">
+                    {lastSyncedAt ? `Last synced ${formatDateTime(lastSyncedAt)}` : connected ? "Connected, not synced yet." : "Connect Withings to import measurements."}
+                  </div>
+                </div>
+              </div>
+              {connected && (
+                <div className="text-sm font-bold text-slate-600">
+                  {metrics.length} measurements in current range
+                </div>
+              )}
+            </div>
+          </Card>
+
           <Card>
             <div className="mb-4 flex flex-wrap gap-2">
               {ranges.map((item) => (
@@ -101,6 +145,14 @@ export function BodyMetrics() {
                   {item.label}
                 </Button>
               ))}
+              <Button
+                type="button"
+                variant={range === 3650 ? "primary" : "secondary"}
+                className="min-h-9 px-3 py-1.5"
+                onClick={() => setRange(3650)}
+              >
+                All
+              </Button>
             </div>
             <div className="grid gap-5 xl:grid-cols-2">
               <MetricChart metrics={metrics} metricKey="weight_kg" />
@@ -170,4 +222,8 @@ function round(value: number) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(value));
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }

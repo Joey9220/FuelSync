@@ -8,7 +8,8 @@ export const handler: Handler = async (event) => {
     if (event.httpMethod !== "GET") return ok({ error: "Method not allowed." }, 405);
 
     const { userId } = await requireAuth(event);
-    const days = Math.min(Number(event.queryStringParameters?.days || 30), 730);
+    const rawDays = Number(event.queryStringParameters?.days || 30);
+    const days = Math.min(Number.isFinite(rawDays) ? rawDays : 30, 3650);
     const sql = db();
     const metrics = await sql`
       select *
@@ -18,12 +19,12 @@ export const handler: Handler = async (event) => {
       order by measured_at asc
     `;
     const [connection] = await sql`
-      select user_id
+      select user_id, last_synced_at
       from withings_connections
       where user_id = ${userId}
     `;
 
-    return ok({ metrics, connected: Boolean(connection) });
+    return ok({ metrics, connected: Boolean(connection), last_synced_at: connection?.last_synced_at ?? null });
   } catch (error) {
     return fail(error);
   }
