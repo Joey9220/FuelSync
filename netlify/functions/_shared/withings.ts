@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type postgres from "postgres";
 
 export type WithingsToken = {
@@ -27,7 +28,6 @@ export async function exchangeCodeForToken(code: string): Promise<WithingsToken>
     action: "requesttoken",
     grant_type: "authorization_code",
     client_id: config.clientId,
-    client_secret: config.clientSecret,
     code,
     redirect_uri: config.callbackUrl,
   });
@@ -39,7 +39,6 @@ export async function refreshWithingsToken(refreshToken: string): Promise<Within
     action: "requesttoken",
     grant_type: "refresh_token",
     client_id: config.clientId,
-    client_secret: config.clientSecret,
     refresh_token: refreshToken,
   });
 }
@@ -85,10 +84,17 @@ export async function upsertWithingsConnection(sql: postgres.Sql, userId: string
 
 async function tokenRequest(params: Record<string, string>) {
   const config = withingsConfig();
+  const nonce = await getWithingsNonce(config);
+  const signedParams = {
+    ...params,
+    nonce,
+    signature: signWithingsRequest({ action: params.action, client_id: config.clientId, nonce }, config.clientSecret),
+  };
+
   const response = await fetch(`${config.apiEndpoint}/v2/oauth2`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(params),
+    body: new URLSearchParams(signedParams),
   });
 
   const data = await response.json();
@@ -97,4 +103,36 @@ async function tokenRequest(params: Record<string, string>) {
   }
 
   return data.body as WithingsToken;
+}
+
+async function getWithingsNonce(config: ReturnType<typeof withingsConfig>) {
+  const timestamp = String(Math.round(Date.now() / 1000));
+  const params = {
+    action: "getnonce",
+    client_id: config.clientId,
+    timestamp,
+    signature: signWithingsRequest({ action: "getnonce", client_id: config.clientId, timestamp }, config.clientSecret),
+  };
+
+  const response = await fetch(`${config.apiEndpoint}/v2/signature`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(params),
+  });
+
+  const data = await response.json();
+  if (!response.ok || data.status !== 0 || !data.body?.nonce) {
+    throw Object.assign(new Error(data.error || "Withings nonce request failed."), { statusCode: 502 });
+  }
+
+  return String(data.body.nonce);
+}
+
+function signWithingsRequest(params: Record<string, string>, clientSecret: string) {
+  const sortedValues = Object.keys(params)
+    .sort()
+    .map((key) => params[key])
+    .join(",");
+
+  return crypto.createHmac("sha256", clientSecret).update(sortedValues).digest("hex");
 }
