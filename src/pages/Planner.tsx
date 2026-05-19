@@ -3,17 +3,24 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityFormModal } from "../components/ActivityFormModal";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
+import { MacroBadges } from "../components/MacroBadges";
+import { ProgressBar } from "../components/ProgressBar";
 import { ErrorState, LoadingState } from "../components/State";
+import { addMacroTotals } from "../lib/calculations";
 import { label } from "../lib/constants";
 import { addDays, formatDayName, formatShortDate, normalizeDateKey, toDateKey, weekDays } from "../lib/date";
 import { useApi } from "../hooks/useApi";
 import { determineDayType } from "../services/dayPriority";
-import type { Activity } from "../types";
+import type { Activity, DailyMealSelection, MacroTarget, MacroTotals, Recipe, TargetGoal } from "../types";
 
 export function Planner() {
   const api = useApi();
   const [anchor, setAnchor] = useState(new Date());
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [mealSelectionsByDate, setMealSelectionsByDate] = useState<Record<string, DailyMealSelection[]>>({});
+  const [targets, setTargets] = useState<MacroTarget[]>([]);
+  const [targetGoal, setTargetGoal] = useState<TargetGoal>("maintenance");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Activity | null | "new">(null);
@@ -25,9 +32,21 @@ export function Planner() {
 
   const load = () => {
     setLoading(true);
-    api
-      .getActivities({ from, to })
-      .then(setActivities)
+    const dateKeys = days.map(toDateKey);
+    Promise.all([
+      api.getActivities({ from, to }),
+      api.getRecipes(),
+      api.getUserPreferences(),
+      Promise.all(dateKeys.map((date) => api.getMealSelections(date).then((selections) => [date, selections] as const))),
+    ])
+      .then(async ([activityRows, recipeRows, preferences, selectionEntries]) => {
+        const targetRows = await api.getMacroTargets(preferences.target_goal);
+        setActivities(activityRows);
+        setRecipes(recipeRows);
+        setTargetGoal(preferences.target_goal);
+        setTargets(targetRows);
+        setMealSelectionsByDate(Object.fromEntries(selectionEntries));
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   };
@@ -80,6 +99,11 @@ export function Planner() {
               const dateKey = toDateKey(day);
               const dayActivities = activities.filter((activity) => normalizeDateKey(activity.date) === dateKey);
               const dayType = determineDayType(dayActivities);
+              const selectedRecipes = (mealSelectionsByDate[dateKey] ?? [])
+                .map((selection) => recipes.find((recipe) => recipe.id === selection.selected_recipe_id))
+                .filter((recipe): recipe is Recipe => Boolean(recipe));
+              const ingested = addMacroTotals(selectedRecipes.map((recipe) => recipe.totals));
+              const target = targets.find((item) => item.day_type === dayType);
               return (
                 <Card key={dateKey} className="flex min-h-[420px] flex-col p-0">
                   <div className="border-b border-slate-100 p-4">
@@ -108,6 +132,7 @@ export function Planner() {
                   </div>
 
                   <div className="flex-1 space-y-3 p-4">
+                    <MacroPlannerBlock ingested={ingested} target={target} targetGoal={targetGoal} />
                     {dayActivities.length === 0 ? (
                       <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
                         Rest day by default. Add a workout to update suggestions.
@@ -188,5 +213,36 @@ function ActivityBlock({
         </div>
       )}
     </article>
+  );
+}
+
+function MacroPlannerBlock({
+  ingested,
+  target,
+  targetGoal,
+}: {
+  ingested: MacroTotals;
+  target: MacroTarget | undefined;
+  targetGoal: TargetGoal;
+}) {
+  return (
+    <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <div className="text-xs font-black uppercase tracking-wide text-slate-500">Macros</div>
+          <div className="text-[11px] font-bold text-slate-500">{label(targetGoal)}</div>
+        </div>
+        <div className="text-right text-xs font-black text-slate-700">
+          {Math.round(ingested.kcal)} / {target?.kcal_max ?? "-"} kcal
+        </div>
+      </div>
+      <MacroBadges totals={ingested} />
+      <div className="mt-3 space-y-2">
+        <ProgressBar label="kcal" value={ingested.kcal} target={target?.kcal_max} />
+        <ProgressBar label="P" value={ingested.protein_g} target={target?.protein_min} />
+        <ProgressBar label="C" value={ingested.carbs_g} target={target?.carbs_max} />
+        <ProgressBar label="F" value={ingested.fat_g} target={target?.fat_max} />
+      </div>
+    </div>
   );
 }

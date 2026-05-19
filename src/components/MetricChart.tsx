@@ -49,6 +49,7 @@ export function MetricChart({
     clientY: number;
     offsetX: number;
     offsetY: number;
+    chartWidth: number;
   } | null>(null);
   const points = metrics
     .map((metric) => ({ date: metric.measured_at, value: metric[metricKey], metric }))
@@ -98,6 +99,8 @@ export function MetricChart({
   const trendPath = toPath(trendPoints);
   const activePoint = tooltip ? pathPoints[tooltip.pointIndex] : null;
   const activeMetric = tooltip ? points[tooltip.pointIndex] : null;
+  const tooltipLeft = tooltip ? clamp(tooltip.offsetX + 14, 8, Math.max(8, tooltip.chartWidth - 232)) : 0;
+  const tooltipTop = tooltip ? clamp(tooltip.offsetY - 96, 8, Math.max(8, height - 118)) : 0;
 
   function updateTooltip(clientX: number, clientY: number, target: EventTarget | null) {
     const svg = target instanceof SVGElement ? target.closest("svg") : null;
@@ -112,6 +115,7 @@ export function MetricChart({
       clientY,
       offsetX: clientX - rect.left,
       offsetY: clientY - rect.top,
+      chartWidth: rect.width,
     });
   }
 
@@ -139,7 +143,12 @@ export function MetricChart({
           </div>
         )}
       </div>
-      <div className="relative">
+      <div className="relative pb-7 pl-10">
+        <div className="pointer-events-none absolute bottom-7 left-0 top-0 flex w-9 flex-col justify-between py-2 text-right text-[11px] font-bold leading-none text-slate-600">
+          {horizontalTicks.map((tick) => (
+            <span key={tick.y}>{formatTickValue(tick.value)}</span>
+          ))}
+        </div>
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
@@ -162,22 +171,6 @@ export function MetricChart({
           ))}
           <line x1="8" x2="8" y1="8" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
           <line x1="8" x2="92" y1="92" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
-          {horizontalTicks.map((tick) => (
-            <text key={`label-${tick.y}`} x="1.8" y={tick.y + 1.1} className="fill-slate-600 text-[3px] font-bold">
-              {formatTickValue(tick.value)}
-            </text>
-          ))}
-          {verticalTicks.map((tick, index) => (
-            <text
-              key={`date-${tick.x}`}
-              x={tick.x}
-              y="98"
-              textAnchor={index === 0 ? "start" : index === verticalTicks.length - 1 ? "end" : "middle"}
-              className="fill-slate-600 text-[3px] font-bold"
-            >
-              {formatDate(tick.date)}
-            </text>
-          ))}
           <path d={path} fill="none" stroke={colors[metricKey]} strokeOpacity="0.38" strokeWidth="3.2" vectorEffect="non-scaling-stroke" />
           <path d={trendPath} fill="none" stroke={colors[metricKey]} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
           {activePoint && (
@@ -187,15 +180,17 @@ export function MetricChart({
             </>
           )}
         </svg>
+        <div className="pointer-events-none absolute bottom-0 left-10 right-0 flex justify-between text-[11px] font-bold leading-none text-slate-600">
+          {verticalTicks.map((tick) => (
+            <span key={tick.x}>{formatDate(tick.date)}</span>
+          ))}
+        </div>
         {tooltip && activeMetric && (
           <div
-            className="pointer-events-none absolute z-10 min-w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-lg"
+            className="pointer-events-none absolute z-10 w-56 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-lg"
             style={{
-              left: tooltip.offsetX,
-              top: tooltip.offsetY,
-              transform: `translate(${tooltip.clientX > window.innerWidth - 180 ? "-105%" : "12px"}, ${
-                tooltip.offsetY < 70 ? "12px" : "-105%"
-              })`,
+              left: tooltipLeft,
+              top: tooltipTop,
             }}
           >
             <div className="text-[11px] uppercase tracking-wide text-slate-500">{formatLongDate(activeMetric.date)}</div>
@@ -211,12 +206,7 @@ export function MetricChart({
           </div>
         )}
       </div>
-      <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-start gap-3 text-[11px] font-semibold text-slate-500">
-        <div className="space-y-0.5">
-          <div>{formatAxisValue(max, units[metricKey])}</div>
-          <div>{formatAxisValue(min, units[metricKey])}</div>
-        </div>
-        <div />
+      <div className="mt-2 flex justify-end text-[11px] font-semibold text-slate-500">
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1"><span className="h-0.5 w-4 rounded-full opacity-40" style={{ backgroundColor: colors[metricKey] }} /> Raw</span>
           <span className="inline-flex items-center gap-1"><span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: colors[metricKey] }} /> Trend</span>
@@ -273,10 +263,6 @@ function formatDate(value: string) {
 
 function formatLongDate(value: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(value));
-}
-
-function formatAxisValue(value: number, unit: string) {
-  return `${round(value)} ${unit}`;
 }
 
 function formatTickValue(value: number) {
