@@ -99,7 +99,8 @@ export function MetricChart({
   const trendPath = toPath(trendPoints);
   const activePoint = tooltip ? pathPoints[tooltip.pointIndex] : null;
   const activeMetric = tooltip ? points[tooltip.pointIndex] : null;
-  const tooltipLeft = tooltip ? clamp(tooltip.offsetX + 14, 8, Math.max(8, tooltip.chartWidth - 232)) : 0;
+  const yAxisWidth = 40;
+  const tooltipLeft = tooltip ? yAxisWidth + clamp(tooltip.offsetX + 14, 8, Math.max(8, tooltip.chartWidth - 232)) : 0;
   const tooltipTop = tooltip ? clamp(tooltip.offsetY - 96, 8, Math.max(8, height - 118)) : 0;
 
   function updateTooltip(clientX: number, clientY: number, target: EventTarget | null) {
@@ -144,45 +145,59 @@ export function MetricChart({
         )}
       </div>
       <div className="relative pb-7 pl-10">
-        <div className="pointer-events-none absolute bottom-7 left-0 top-0 flex w-9 flex-col justify-between py-2 text-right text-[11px] font-bold leading-none text-slate-600">
-          {horizontalTicks.map((tick) => (
-            <span key={tick.y}>{formatTickValue(tick.value)}</span>
-          ))}
+        <div className="relative" style={{ height }}>
+          <div className="pointer-events-none absolute bottom-0 left-0 top-0 w-9 text-right text-[11px] font-bold leading-none text-slate-600">
+            {horizontalTicks.map((tick) => (
+              <span
+                key={tick.y}
+                className="absolute right-0 -translate-y-1/2"
+                style={{ top: `${tick.y}%` }}
+              >
+                {formatTickValue(tick.value)}
+              </span>
+            ))}
+          </div>
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-y-0 left-10 right-0 w-[calc(100%-2.5rem)] cursor-crosshair rounded-lg border border-slate-300 bg-white"
+            style={{ height }}
+            onMouseMove={(event) => updateTooltip(event.clientX, event.clientY, event.currentTarget)}
+            onMouseLeave={() => setTooltip(null)}
+            onTouchMove={(event) => {
+              const touch = event.touches[0];
+              if (touch) updateTooltip(touch.clientX, touch.clientY, event.currentTarget);
+            }}
+            onTouchEnd={() => setTooltip(null)}
+          >
+            <rect x="0" y="0" width="100" height="100" fill="#ffffff" />
+            {verticalTicks.map((tick) => (
+              <line key={tick.x} x1={tick.x} x2={tick.x} y1="8" y2="92" stroke="#cbd5e1" strokeWidth="0.7" vectorEffect="non-scaling-stroke" />
+            ))}
+            {horizontalTicks.map((tick) => (
+              <line key={tick.y} x1="8" x2="92" y1={tick.y} y2={tick.y} stroke="#94a3b8" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />
+            ))}
+            <line x1="8" x2="8" y1="8" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
+            <line x1="8" x2="92" y1="92" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
+            <path d={path} fill="none" stroke={colors[metricKey]} strokeOpacity="0.38" strokeWidth="3.2" vectorEffect="non-scaling-stroke" />
+            <path d={trendPath} fill="none" stroke={colors[metricKey]} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+            {activePoint && (
+              <>
+                <line x1={activePoint.x} x2={activePoint.x} y1="8" y2="92" stroke="#0f172a" strokeOpacity="0.55" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                <circle cx={activePoint.x} cy={activePoint.y} r="1.3" fill="#ffffff" stroke={colors[metricKey]} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+              </>
+            )}
+          </svg>
         </div>
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          className="w-full cursor-crosshair rounded-lg border border-slate-300 bg-white"
-          style={{ height }}
-          onMouseMove={(event) => updateTooltip(event.clientX, event.clientY, event.currentTarget)}
-          onMouseLeave={() => setTooltip(null)}
-          onTouchMove={(event) => {
-            const touch = event.touches[0];
-            if (touch) updateTooltip(touch.clientX, touch.clientY, event.currentTarget);
-          }}
-          onTouchEnd={() => setTooltip(null)}
-        >
-          <rect x="0" y="0" width="100" height="100" fill="#ffffff" />
-          {verticalTicks.map((tick) => (
-            <line key={tick.x} x1={tick.x} x2={tick.x} y1="8" y2="92" stroke="#cbd5e1" strokeWidth="0.7" vectorEffect="non-scaling-stroke" />
-          ))}
-          {horizontalTicks.map((tick) => (
-            <line key={tick.y} x1="8" x2="92" y1={tick.y} y2={tick.y} stroke="#94a3b8" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />
-          ))}
-          <line x1="8" x2="8" y1="8" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
-          <line x1="8" x2="92" y1="92" y2="92" stroke="#64748b" strokeWidth="0.9" vectorEffect="non-scaling-stroke" />
-          <path d={path} fill="none" stroke={colors[metricKey]} strokeOpacity="0.38" strokeWidth="3.2" vectorEffect="non-scaling-stroke" />
-          <path d={trendPath} fill="none" stroke={colors[metricKey]} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-          {activePoint && (
-            <>
-              <line x1={activePoint.x} x2={activePoint.x} y1="8" y2="92" stroke="#0f172a" strokeOpacity="0.55" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-              <circle cx={activePoint.x} cy={activePoint.y} r="1.3" fill="#ffffff" stroke={colors[metricKey]} strokeWidth="1" vectorEffect="non-scaling-stroke" />
-            </>
-          )}
-        </svg>
-        <div className="pointer-events-none absolute bottom-0 left-10 right-0 flex justify-between text-[11px] font-bold leading-none text-slate-600">
-          {verticalTicks.map((tick) => (
-            <span key={tick.x}>{formatDate(tick.date)}</span>
+        <div className="pointer-events-none absolute bottom-0 left-10 right-0 text-[11px] font-bold leading-none text-slate-600">
+          {verticalTicks.map((tick, index) => (
+            <span
+              key={tick.x}
+              className={`absolute ${index === 0 ? "" : index === verticalTicks.length - 1 ? "-translate-x-full" : "-translate-x-1/2"}`}
+              style={{ left: `${tick.x}%` }}
+            >
+              {formatDate(tick.date)}
+            </span>
           ))}
         </div>
         {tooltip && activeMetric && (

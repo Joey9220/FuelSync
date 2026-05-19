@@ -101,6 +101,7 @@ export type MacroTargetPayload = Omit<MacroTarget, "id" | "created_at" | "update
 
 export type UserPreferences = {
   target_goal: TargetGoal;
+  height_cm?: number | null;
 };
 
 export type MealTimingContext = Record<MealType, TimingType>;

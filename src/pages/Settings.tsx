@@ -6,7 +6,7 @@ import { Field, Input, Select } from "../components/FormField";
 import { ErrorState, LoadingState } from "../components/State";
 import { dayTypes, label, targetGoals } from "../lib/constants";
 import { useApi } from "../hooks/useApi";
-import type { DayType, MacroTarget, MacroTargetPayload, TargetGoal } from "../types";
+import type { BodyMetric, DayType, MacroTarget, MacroTargetPayload, TargetGoal } from "../types";
 
 type TargetNumbers = Omit<MacroTargetPayload, "day_type" | "target_goal">;
 
@@ -66,18 +66,30 @@ export function Settings() {
   const [calculator, setCalculator] = useState({
     currentWeight: "",
     height: "",
+    bodyFatPercentage: "",
     goalWeight: "",
     goalDate: "",
+    calculationMode: "goalDate" as "goalDate" | "weeklyRate",
+    weeklyRate: "",
   });
+  const [latestBodyMetric, setLatestBodyMetric] = useState<BodyMetric | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    Promise.all([api.getUserPreferences(), api.getMacroTargets()])
-      .then(([preferences, rows]) => {
+    Promise.all([api.getUserPreferences(), api.getMacroTargets(), api.getBodyMetrics(3650)])
+      .then(([preferences, rows, bodyMetricRows]) => {
+        const latestMetric = bodyMetricRows.metrics.at(-1) ?? null;
         setSelectedGoal(preferences.target_goal);
         setTargets(initialTargets(rows));
+        setLatestBodyMetric(latestMetric);
+        setCalculator((current) => ({
+          ...current,
+          currentWeight: latestMetric?.weight_kg ? String(roundOne(latestMetric.weight_kg)) : current.currentWeight,
+          bodyFatPercentage: latestMetric?.fat_percentage ? String(roundOne(latestMetric.fat_percentage)) : current.bodyFatPercentage,
+          height: preferences.height_cm ? String(preferences.height_cm) : current.height,
+        }));
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -106,17 +118,24 @@ export function Settings() {
     setCalculator((current) => ({ ...current, [key]: value }));
   }
 
-  function applyCalculatedTargets() {
+  async function applyCalculatedTargets() {
     const calculated = calculateTargets({
       selectedGoal,
       currentWeight: Number(calculator.currentWeight),
       height: Number(calculator.height),
+      bodyFatPercentage: Number(calculator.bodyFatPercentage),
       goalWeight: Number(calculator.goalWeight),
       goalDate: calculator.goalDate,
+      calculationMode: calculator.calculationMode,
+      weeklyRate: Number(calculator.weeklyRate),
     });
 
     if (!calculated) {
-      setError("Enter current weight, height, goal weight and a future goal date.");
+      setError(
+        calculator.calculationMode === "goalDate"
+          ? "Enter current weight, height, goal weight and a future goal date."
+          : "Enter current weight, height and a weekly weight change rate.",
+      );
       return;
     }
 
@@ -131,6 +150,11 @@ export function Settings() {
         {} as Record<DayType, MacroTargetPayload>,
       ),
     }));
+    try {
+      await api.saveUserPreferences({ target_goal: selectedGoal, height_cm: Number(calculator.height) || null });
+    } catch {
+      // Height persistence is helpful but should not block filling editable targets.
+    }
   }
 
   async function submit(event: FormEvent) {
@@ -139,7 +163,7 @@ export function Settings() {
     setError("");
     try {
       await Promise.all(dayTypes.map((dayType) => api.saveMacroTarget(targets[selectedGoal][dayType])));
-      await api.saveUserPreferences({ target_goal: selectedGoal });
+      await api.saveUserPreferences({ target_goal: selectedGoal, height_cm: Number(calculator.height) || null });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save macro targets.");
     } finally {
@@ -190,8 +214,14 @@ export function Settings() {
               <div>
                 <h2 className="text-lg font-black">Auto calculate targets</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Estimates macro ranges for the selected goal across all day types.
+                  Uses your latest known Withings weight/body-fat where available, then estimates macro ranges for all day types.
                 </p>
+                {latestBodyMetric && (
+                  <p className="mt-2 text-xs font-bold text-slate-500">
+                    Latest body metric: {roundOne(latestBodyMetric.weight_kg ?? 0)} kg
+                    {latestBodyMetric.fat_percentage ? `, ${roundOne(latestBodyMetric.fat_percentage)}% fat` : ""}
+                  </p>
+                )}
               </div>
               <Button type="button" variant="secondary" onClick={applyCalculatedTargets}>
                 Calculate and fill targets
@@ -207,14 +237,33 @@ export function Settings() {
                   onChange={(event) => updateCalculator("currentWeight", event.target.value)}
                 />
               </Field>
+              <Field label="Body fat %">
+                <Input
+                  type="number"
+                  min="1"
+                  max="80"
+                  step="0.1"
+                  value={calculator.bodyFatPercentage}
+                  onChange={(event) => updateCalculator("bodyFatPercentage", event.target.value)}
+                />
+              </Field>
               <Field label="Height cm">
                 <Input
                   type="number"
                   min="1"
-                  step="0.1"
+                  step="1"
                   value={calculator.height}
                   onChange={(event) => updateCalculator("height", event.target.value)}
                 />
+              </Field>
+              <Field label="Calculation mode">
+                <Select
+                  value={calculator.calculationMode}
+                  onChange={(event) => updateCalculator("calculationMode", event.target.value)}
+                >
+                  <option value="goalDate">Target goal date</option>
+                  <option value="weeklyRate">Fixed weekly rate</option>
+                </Select>
               </Field>
               <Field label="Goal weight kg">
                 <Input
@@ -223,6 +272,7 @@ export function Settings() {
                   step="0.1"
                   value={calculator.goalWeight}
                   onChange={(event) => updateCalculator("goalWeight", event.target.value)}
+                  disabled={calculator.calculationMode !== "goalDate"}
                 />
               </Field>
               <Field label="Goal date">
@@ -230,9 +280,22 @@ export function Settings() {
                   type="date"
                   value={calculator.goalDate}
                   onChange={(event) => updateCalculator("goalDate", event.target.value)}
+                  disabled={calculator.calculationMode !== "goalDate"}
+                />
+              </Field>
+              <Field label="Weight change kg/week">
+                <Input
+                  type="number"
+                  step="0.05"
+                  value={calculator.weeklyRate}
+                  onChange={(event) => updateCalculator("weeklyRate", event.target.value)}
+                  disabled={calculator.calculationMode !== "weeklyRate"}
                 />
               </Field>
             </div>
+            <p className="mt-3 text-xs font-semibold text-slate-500">
+              Use negative weekly values for weight loss, positive values for lean gain. All generated targets remain editable before saving.
+            </p>
           </Card>
 
           {dayTypes.map((dayType) => (
@@ -260,30 +323,46 @@ function calculateTargets({
   selectedGoal,
   currentWeight,
   height,
+  bodyFatPercentage,
   goalWeight,
   goalDate,
+  calculationMode,
+  weeklyRate,
 }: {
   selectedGoal: TargetGoal;
   currentWeight: number;
   height: number;
+  bodyFatPercentage: number;
   goalWeight: number;
   goalDate: string;
+  calculationMode: "goalDate" | "weeklyRate";
+  weeklyRate: number;
 }): Record<DayType, TargetNumbers> | null {
-  if (!currentWeight || !height || !goalWeight || !goalDate) return null;
-  const daysUntilGoal = Math.ceil((new Date(goalDate).getTime() - Date.now()) / 86400000);
-  if (daysUntilGoal <= 0) return null;
-
-  const weeksUntilGoal = daysUntilGoal / 7;
-  const requestedWeeklyRate = (goalWeight - currentWeight) / weeksUntilGoal;
+  if (!currentWeight || !height) return null;
   const goalProfile = goalDefaults[selectedGoal];
-  const weeklyRate = selectedGoal === "maintenance" || selectedGoal === "recomp"
-    ? goalProfile.weeklyRate
-    : clamp(requestedWeeklyRate, -0.9, 0.45);
+  let selectedWeeklyRate = goalProfile.weeklyRate;
 
-  const leanMassEstimate = currentWeight * 0.82;
+  if (calculationMode === "goalDate") {
+    if (!goalWeight || !goalDate) return null;
+    const daysUntilGoal = Math.ceil((new Date(goalDate).getTime() - Date.now()) / 86400000);
+    if (daysUntilGoal <= 0) return null;
+    const weeksUntilGoal = daysUntilGoal / 7;
+    selectedWeeklyRate = (goalWeight - currentWeight) / weeksUntilGoal;
+  } else {
+    if (!Number.isFinite(weeklyRate)) return null;
+    selectedWeeklyRate = weeklyRate;
+  }
+
+  selectedWeeklyRate = selectedGoal === "maintenance" || selectedGoal === "recomp"
+    ? selectedWeeklyRate
+    : clamp(selectedWeeklyRate, -0.9, 0.45);
+
+  const leanMassEstimate = bodyFatPercentage > 0 && bodyFatPercentage < 80
+    ? currentWeight * (1 - bodyFatPercentage / 100)
+    : currentWeight * 0.82;
   const bmr = 10 * currentWeight + 6.25 * height - 5 * 35 + 5;
   const maintenance = bmr * 1.45;
-  const goalDelta = (weeklyRate * 7700) / 7;
+  const goalDelta = (selectedWeeklyRate * 7700) / 7;
   const protein = Math.round(currentWeight * goalProfile.protein);
   const fatBase = Math.round(currentWeight * goalProfile.fat);
 
@@ -315,6 +394,10 @@ function calculateTargets({
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function roundOne(value: number) {
+  return Math.round(value * 10) / 10;
 }
 
 function NumberField({ label: labelText, value, onChange }: { label: string; value: number | null; onChange: (value: string) => void }) {
