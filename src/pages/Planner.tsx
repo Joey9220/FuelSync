@@ -8,7 +8,7 @@ import { ProgressBar } from "../components/ProgressBar";
 import { ErrorState, LoadingState } from "../components/State";
 import { addMacroTotals } from "../lib/calculations";
 import { label } from "../lib/constants";
-import { addDays, formatDayName, formatShortDate, normalizeDateKey, toDateKey } from "../lib/date";
+import { addDays, formatDayName, formatShortDate, normalizeDateKey, todayKey, toDateKey } from "../lib/date";
 import { useApi } from "../hooks/useApi";
 import { determineDayType } from "../services/dayPriority";
 import type { Activity, DailyMealSelection, MacroTarget, MacroTotals, Recipe, TargetGoal } from "../types";
@@ -31,6 +31,7 @@ export function Planner() {
   const days = useMemo(() => plannerDays(anchor), [anchor]);
   const from = toDateKey(days[0]);
   const to = toDateKey(days[days.length - 1]);
+  const today = todayKey();
   const monthLabel = useMemo(
     () => new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(anchor),
     [anchor],
@@ -109,6 +110,7 @@ export function Planner() {
             {days.map((day) => {
               const dateKey = toDateKey(day);
               const inAnchorMonth = day.getMonth() === anchor.getMonth();
+              const isToday = dateKey === today;
               const dayActivities = activities.filter((activity) => normalizeDateKey(activity.date) === dateKey);
               const dayType = determineDayType(dayActivities);
               const selectedRecipes = (mealSelectionsByDate[dateKey] ?? [])
@@ -117,16 +119,24 @@ export function Planner() {
               const ingested = addMacroTotals(selectedRecipes.map((recipe) => recipe.totals));
               const target = targets.find((item) => item.day_type === dayType);
               return (
-                <Card key={dateKey} className={`flex min-h-[340px] flex-col p-0 ${inAnchorMonth ? "" : "bg-slate-50 opacity-80"}`}>
-                  <div className="border-b border-slate-100 p-3">
+                <Card
+                  key={dateKey}
+                  className={`flex min-h-[340px] flex-col p-0 ${
+                    isToday ? "border-mint ring-2 ring-emerald-100" : inAnchorMonth ? "" : "bg-slate-50 opacity-80"
+                  }`}
+                >
+                  <div className={`border-b p-3 ${isToday ? "border-emerald-100 bg-emerald-50/70" : "border-slate-100"}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="text-xs font-black uppercase tracking-wide text-mint">{formatDayName(day)}</div>
                         <h2 className="mt-1 text-base font-black">{formatShortDate(dateKey)}</h2>
                       </div>
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">
-                        {dayActivities.length}
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        {isToday && <span className="rounded-full bg-mint px-2.5 py-1 text-[11px] font-black uppercase text-white">Today</span>}
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">
+                          {dayActivities.length}
+                        </span>
+                      </div>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800">
