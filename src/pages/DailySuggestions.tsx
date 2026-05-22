@@ -49,6 +49,8 @@ export function DailySuggestions() {
   const [detailRecipe, setDetailRecipe] = useState<Recipe | null>(null);
   const [targets, setTargets] = useState<MacroTarget[]>([]);
   const [targetGoal, setTargetGoal] = useState<TargetGoal>("maintenance");
+  const [heightCm, setHeightCm] = useState<number | null>(null);
+  const [latestWeightKg, setLatestWeightKg] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingPlan, setSavingPlan] = useState(false);
   const [trainingModalOpen, setTrainingModalOpen] = useState(false);
@@ -75,9 +77,11 @@ export function DailySuggestions() {
       api.getMealSelections(date),
       api.getDailyFoodEntries(date),
       api.getUserPreferences(),
+      api.getBodyMetrics(30),
     ])
-      .then(async ([activityRows, recipeRows, ingredientRows, selectionRows, entryRows, preferences]) => {
+      .then(async ([activityRows, recipeRows, ingredientRows, selectionRows, entryRows, preferences, bodyMetrics]) => {
         const targetRows = await api.getMacroTargets(preferences.target_goal);
+        const latestMetric = [...bodyMetrics.metrics].reverse().find((metric) => metric.weight_kg);
         const migratedEntries = entryRows.length
           ? entryRows
           : await Promise.all(
@@ -110,6 +114,8 @@ export function DailySuggestions() {
         setFoodEntries(migratedEntries);
         setTargets(targetRows);
         setTargetGoal(preferences.target_goal);
+        setHeightCm(preferences.height_cm ?? null);
+        setLatestWeightKg(latestMetric?.weight_kg ?? null);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -348,7 +354,15 @@ export function DailySuggestions() {
             onApplyTargets={applyAiTargets}
           />
 
-          <LiveEnergyChart entries={foodEntries} recipes={recipes} ingredients={ingredients} activities={activities} />
+          <LiveEnergyChart
+            date={date}
+            entries={foodEntries}
+            recipes={recipes}
+            ingredients={ingredients}
+            activities={activities}
+            heightCm={heightCm}
+            weightKg={latestWeightKg}
+          />
 
           <Collapsible title="Recommended meal plan" open={openSections.meals} onToggle={() => toggleSection("meals")}>
             {!hasAnyRecommendation ? (
@@ -872,16 +886,37 @@ function MacroCell({ value, tone, subtle = false }: { value: number; tone: "kcal
 }
 
 function LiveEnergyChart({
+  date,
   entries,
   recipes,
   ingredients,
   activities,
+  heightCm,
+  weightKg,
 }: {
+  date: string;
   entries: DailyFoodEntry[];
   recipes: Recipe[];
   ingredients: Ingredient[];
   activities: Activity[];
+  heightCm: number | null;
+  weightKg: number | null;
 }) {
+  const intakeEvents = entries.map((entry) => ({
+    type: "meal" as const,
+    minute: timeToMinutes(entry.intake_time ?? defaultMealTime(entry.meal_type)),
+    kcal: calculateFoodEntryTotals(entry, recipes, ingredients).kcal,
+    label: entryLabel(entry, recipes, ingredients),
+  }));
+  const workoutEvents = activities
+    .filter((activity) => activity.start_time)
+    .map((activity) => ({
+      type: "workout" as const,
+      minute: timeToMinutes(activity.start_time ?? "12:00"),
+      duration: Number(activity.duration_minutes ?? 45),
+      kcal: estimateWorkoutKcal(activity),
+      label: label(activity.activity_type),
+    }));
   const events = [
     ...entries.map((entry) => ({
       type: "meal" as const,
@@ -899,14 +934,25 @@ function LiveEnergyChart({
       })),
   ].sort((a, b) => a.minute - b.minute);
 
-  const points = [{ minute: 0, value: 0 }];
-  let running = 0;
-  for (const event of events) {
-    points.push({ minute: event.minute, value: running });
-    running += event.kcal;
-    points.push({ minute: event.minute, value: running });
-  }
-  points.push({ minute: 1440, value: running });
+  const dailyBurn = estimateDailyEnergyUse(weightKg, heightCm);
+  const valueAt = (minute: number) => {
+    const restingBurn = (dailyBurn / 1440) * minute;
+    const absorbed = intakeEvents.reduce(
+      (total, event) => total + event.kcal * smoothProgress((minute - event.minute) / mealAbsorptionMinutes(event.kcal)),
+      0,
+    );
+    const workoutBurn = workoutEvents.reduce(
+      (total, event) => total + event.kcal * clamp01((minute - event.minute) / Math.max(1, event.duration)),
+      0,
+    );
+    return absorbed - restingBurn - workoutBurn;
+  };
+  const points = Array.from({ length: 97 }, (_, index) => {
+    const minute = index * 15;
+    return { minute, value: valueAt(minute) };
+  });
+  const currentMinute = date === todayKey() ? currentDayMinute() : 1440;
+  const running = valueAt(currentMinute);
 
   const minValue = Math.min(-250, ...points.map((point) => point.value));
   const maxValue = Math.max(500, ...points.map((point) => point.value));
@@ -918,7 +964,7 @@ function LiveEnergyChart({
   const plotHeight = height - padding.top - padding.bottom;
   const x = (minute: number) => padding.left + (minute / 1440) * plotWidth;
   const y = (value: number) => padding.top + ((maxValue - value) / range) * plotHeight;
-  const path = points.map((point) => `${x(point.minute)},${y(point.value)}`).join(" ");
+  const path = smoothPath(points.map((point) => ({ x: x(point.minute), y: y(point.value) })));
   const zeroY = y(0);
 
   return (
@@ -926,11 +972,13 @@ function LiveEnergyChart({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-sm font-black uppercase tracking-wide text-mint">Live Energy</div>
-          <p className="text-sm font-semibold text-slate-500">Net logged kcal by intake time, with workout estimates deducted.</p>
+          <p className="text-sm font-semibold text-slate-500">
+            Smooth net kcal: resting burn, gradual meal absorption, and workout burn over time.
+          </p>
         </div>
         <div className="text-right text-sm font-black">
           {Math.round(running)} kcal
-          <div className="text-xs font-bold text-slate-500">current net</div>
+          <div className="text-xs font-bold text-slate-500">{Math.round(dailyBurn)} kcal/day baseline</div>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -948,9 +996,9 @@ function LiveEnergyChart({
             </g>
           ))}
           <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} stroke="#cbd5e1" strokeDasharray="4 4" />
-          <polyline points={path} fill="none" stroke="#f8fafc" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={path} fill="none" stroke="#f8fafc" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
           {events.map((event, index) => {
-            const valueAfter = [...points].reverse().find((point) => point.minute === event.minute)?.value ?? 0;
+            const valueAfter = valueAt(event.minute);
             return (
               <g key={`${event.type}-${event.minute}-${index}`}>
                 <circle cx={x(event.minute)} cy={y(valueAfter)} r="7" fill={event.type === "meal" ? "#f59e0b" : "#38bdf8"} stroke="#0f172a" strokeWidth="2" />
@@ -963,6 +1011,7 @@ function LiveEnergyChart({
       <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold text-slate-600">
         <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-amber-500" />Logged intake</span>
         <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-sky-400" />Workout estimate</span>
+        <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-slate-500" />Baseline from height/weight estimate</span>
       </div>
     </Card>
   );
@@ -1210,6 +1259,45 @@ function estimateWorkoutKcal(activity: Activity) {
         ? 0.85
         : 0;
   return Math.round(minutes * intensityFactor * typeFactor);
+}
+
+function estimateDailyEnergyUse(weightKg: number | null, heightCm: number | null) {
+  if (!weightKg && !heightCm) return 2100;
+  const weight = weightKg ?? 75;
+  const height = heightCm ?? 178;
+  const ageFallback = 35;
+  const resting = 10 * weight + 6.25 * height - 5 * ageFallback + 5;
+  return Math.max(1500, Math.round(resting * 1.32));
+}
+
+function smoothProgress(value: number) {
+  const progress = clamp01(value);
+  return progress * progress * (3 - 2 * progress);
+}
+
+function mealAbsorptionMinutes(kcal: number) {
+  return Math.min(300, Math.max(120, 120 + kcal / 8));
+}
+
+function clamp01(value: number) {
+  return Math.min(1, Math.max(0, value));
+}
+
+function currentDayMinute() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+function smoothPath(points: Array<{ x: number; y: number }>) {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+  return points.reduce((path, point, index) => {
+    if (index === 0) return `M ${point.x} ${point.y}`;
+    const previous = points[index - 1];
+    const controlX = (previous.x + point.x) / 2;
+    return `${path} C ${controlX} ${previous.y}, ${controlX} ${point.y}, ${point.x} ${point.y}`;
+  }, "");
 }
 
 function entryLabel(entry: DailyFoodEntry, recipes: Recipe[], ingredients: Ingredient[]) {
