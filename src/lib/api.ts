@@ -50,10 +50,14 @@ export function createApiClient(getToken: () => Promise<string>) {
 
   return {
     getStats: () => request<{ stats: Stats }>("/stats").then((data) => data.stats),
-    getIngredients: (search = "") =>
-      request<{ ingredients: Ingredient[] }>(`/ingredients${search ? `?search=${encodeURIComponent(search)}` : ""}`).then(
+    getIngredients: (search = "", ingredientType = "") => {
+      const query = new URLSearchParams();
+      if (search) query.set("search", search);
+      if (ingredientType) query.set("type", ingredientType);
+      return request<{ ingredients: Ingredient[] }>(`/ingredients${query.size ? `?${query}` : ""}`).then(
         (data) => data.ingredients,
-      ),
+      );
+    },
     createIngredient: (payload: Omit<Ingredient, "id" | "created_at" | "updated_at">) =>
       request<{ ingredient: Ingredient }>("/ingredients", { method: "POST", body: JSON.stringify(payload) }).then(
         (data) => data.ingredient,

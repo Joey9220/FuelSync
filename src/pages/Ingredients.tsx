@@ -10,6 +10,7 @@ import type { Ingredient } from "../types";
 
 const emptyForm = {
   name: "",
+  ingredient_type: "other",
   default_quantity: 100,
   unit: "g",
   kcal: 0,
@@ -19,13 +20,14 @@ const emptyForm = {
   notes: "",
 };
 
-type IngredientSortKey = "name" | "kcal" | "protein_g" | "fat_g" | "carbs_g" | "default_quantity" | "unit";
+type IngredientSortKey = "name" | "ingredient_type" | "kcal" | "protein_g" | "fat_g" | "carbs_g" | "default_quantity" | "unit";
 type SortDirection = "asc" | "desc";
 
 export function Ingredients() {
   const api = useApi();
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [sortKey, setSortKey] = useState<IngredientSortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [loading, setLoading] = useState(true);
@@ -34,18 +36,19 @@ export function Ingredients() {
 
   const load = () => {
     setLoading(true);
-    api.getIngredients(search).then(setIngredients).catch((err) => setError(err.message)).finally(() => setLoading(false));
+    api.getIngredients(search, typeFilter).then(setIngredients).catch((err) => setError(err.message)).finally(() => setLoading(false));
   };
 
   useEffect(() => {
     const handle = window.setTimeout(load, 250);
     return () => window.clearTimeout(handle);
-  }, [search]);
+  }, [search, typeFilter]);
 
   const sortedIngredients = useMemo(
     () => sortRows(ingredients, sortKey, sortDirection),
     [ingredients, sortKey, sortDirection],
   );
+  const typeOptions = useMemo(() => ingredientTypes(ingredients), [ingredients]);
 
   function updateSort(key: IngredientSortKey) {
     if (sortKey === key) {
@@ -67,15 +70,25 @@ export function Ingredients() {
       </header>
 
       <Card>
-        <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-          <Search size={18} className="text-slate-400" />
-          <input
-            className="w-full outline-none"
-            placeholder="Filter ingredients by name"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <Search size={18} className="text-slate-400" />
+            <input
+              className="w-full outline-none"
+              placeholder="Filter ingredients by name"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <FilterPill active={!typeFilter} onClick={() => setTypeFilter("")}>All types</FilterPill>
+            {typeOptions.map((type) => (
+              <FilterPill key={type} active={typeFilter === type} onClick={() => setTypeFilter(type)}>
+                {type}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
       </Card>
 
       {error && <ErrorState message={error} />}
@@ -84,10 +97,11 @@ export function Ingredients() {
       ) : (
         <Card className="p-0">
           <div className="overflow-x-auto">
-            <table className="min-w-[760px] w-full border-collapse text-left text-[11px]">
+            <table className="min-w-[840px] w-full border-collapse text-left text-[11px]">
               <thead className="bg-slate-100 text-[10px] uppercase tracking-wide text-slate-700">
                 <tr>
                   <SortableHeader label="Name" active={sortKey === "name"} direction={sortDirection} onClick={() => updateSort("name")} />
+                  <SortableHeader label="Type" active={sortKey === "ingredient_type"} direction={sortDirection} onClick={() => updateSort("ingredient_type")} />
                   <SortableHeader label="kcal" active={sortKey === "kcal"} direction={sortDirection} onClick={() => updateSort("kcal")} align="right" />
                   <SortableHeader label="P" active={sortKey === "protein_g"} direction={sortDirection} onClick={() => updateSort("protein_g")} align="right" />
                   <SortableHeader label="F" active={sortKey === "fat_g"} direction={sortDirection} onClick={() => updateSort("fat_g")} align="right" />
@@ -101,6 +115,7 @@ export function Ingredients() {
                 {sortedIngredients.map((ingredient) => (
                   <tr key={ingredient.id} className="hover:bg-slate-50">
                     <td className="border border-slate-300 px-2 py-1.5 font-black text-ink">{ingredient.name}</td>
+                    <td className="border border-slate-300 px-2 py-1.5">{ingredient.ingredient_type || "other"}</td>
                     <MacroCell tone="kcal" value={ingredient.kcal} />
                     <MacroCell tone="protein" value={ingredient.protein_g} />
                     <MacroCell tone="fat" value={ingredient.fat_g} />
@@ -183,6 +198,20 @@ function MacroCell({ tone, value }: { tone: "kcal" | "protein" | "fat" | "carbs"
   );
 }
 
+function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      className={`rounded-full px-3 py-1.5 text-sm font-black capitalize transition ${
+        active ? "bg-mint text-white" : "bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
+      }`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
 function sortRows(rows: Ingredient[], key: IngredientSortKey, direction: SortDirection) {
   return [...rows].sort((a, b) => {
     const aValue = a[key];
@@ -192,6 +221,12 @@ function sortRows(rows: Ingredient[], key: IngredientSortKey, direction: SortDir
       : Number(aValue) - Number(bValue);
     return direction === "asc" ? result : -result;
   });
+}
+
+function ingredientTypes(ingredients: Ingredient[]) {
+  return Array.from(new Set(ingredients.map((ingredient) => ingredient.ingredient_type || "other"))).sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
 
 function round(value: number) {
@@ -212,6 +247,7 @@ function IngredientModal({ ingredient, onClose, onSaved }: { ingredient: Ingredi
     setError("");
     const payload = {
       name: form.name.trim(),
+      ingredient_type: form.ingredient_type?.trim() || "other",
       default_quantity: Number(form.default_quantity),
       unit: form.unit.trim(),
       kcal: Number(form.kcal),
@@ -240,7 +276,10 @@ function IngredientModal({ ingredient, onClose, onSaved }: { ingredient: Ingredi
     <Modal title={ingredient ? "Edit ingredient" : "Add ingredient"} onClose={onClose}>
       <form className="space-y-4" onSubmit={submit}>
         {error && <ErrorState message={error} />}
-        <Field label="Name"><Input value={form.name} onChange={(e) => update("name", e.target.value)} required /></Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Name"><Input value={form.name} onChange={(e) => update("name", e.target.value)} required /></Field>
+          <Field label="Type"><Input value={form.ingredient_type ?? "other"} onChange={(e) => update("ingredient_type", e.target.value)} placeholder="protein, carb, fat, vegetable" /></Field>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Default quantity"><Input type="number" min="0.01" step="0.01" value={form.default_quantity} onChange={(e) => update("default_quantity", e.target.value)} required /></Field>
           <Field label="Unit"><Input value={form.unit} onChange={(e) => update("unit", e.target.value)} required /></Field>

@@ -75,7 +75,7 @@ export function Recipes() {
       </header>
 
       <Card>
-        <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
+        <div className="space-y-3">
           <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
             <Search size={18} className="text-slate-400" />
             <input
@@ -85,10 +85,14 @@ export function Recipes() {
               onChange={(event) => setTextFilter(event.target.value)}
             />
           </label>
-          <Select value={mealFilter} onChange={(event) => setMealFilter(event.target.value)}>
-            <option value="">All meal types</option>
-            {mealTypes.map((type) => <option key={type} value={type}>{label(type)}</option>)}
-          </Select>
+          <div className="flex flex-wrap gap-2">
+            <FilterPill active={!mealFilter} onClick={() => setMealFilter("")}>All meals</FilterPill>
+            {mealTypes.map((type) => (
+              <FilterPill key={type} active={mealFilter === type} onClick={() => setMealFilter(type)}>
+                {label(type)}
+              </FilterPill>
+            ))}
+          </div>
         </div>
       </Card>
 
@@ -252,6 +256,20 @@ function MacroCell({ tone, value }: { tone: "kcal" | "protein" | "fat" | "carbs"
   );
 }
 
+function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      className={`rounded-full px-3 py-1.5 text-sm font-black capitalize transition ${
+        active ? "bg-mint text-white" : "bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
+      }`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
 function RecipeModal({
   recipe,
   ingredients,
@@ -266,14 +284,8 @@ function RecipeModal({
   const api = useApi();
   const [form, setForm] = useState(recipe ? normalizeRecipe(recipe) : emptyRecipe);
   const [tagText, setTagText] = useState(recipe?.tags?.join(", ") || "");
-  const [ingredientSearch, setIngredientSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  const filteredIngredients = useMemo(
-    () => ingredients.filter((ingredient) => wildcardMatch(ingredient.name, ingredientSearch)),
-    [ingredients, ingredientSearch],
-  );
 
   const totals = useMemo(
     () => formatTotals(calculateRecipeTotals(form.ingredients, ingredients)),
@@ -290,14 +302,9 @@ function RecipeModal({
   }
 
   function addRecipeIngredient() {
-    const ingredient = filteredIngredients[0] ?? ingredients[0];
-    if (!ingredient) {
-      setError("Add at least one ingredient before creating recipes.");
-      return;
-    }
     setForm((current) => ({
       ...current,
-      ingredients: [...current.ingredients, { ingredient_id: ingredient.id, quantity: ingredient.default_quantity, unit: ingredient.unit }],
+      ingredients: [...current.ingredients, { ingredient_id: "", quantity: 0, unit: "" }],
     }));
   }
 
@@ -309,7 +316,10 @@ function RecipeModal({
         const next = { ...item, ...patch };
         if (patch.ingredient_id) {
           const ingredient = ingredients.find((candidate) => candidate.id === patch.ingredient_id);
-          if (ingredient) next.unit = ingredient.unit;
+          if (ingredient) {
+            next.unit = ingredient.unit;
+            if (!Number(next.quantity) || Number(next.quantity) <= 0) next.quantity = ingredient.default_quantity;
+          }
         }
         return next;
       }),
@@ -368,14 +378,9 @@ function RecipeModal({
 
         <Card className="shadow-none">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex-1">
-              <Field label="Filter ingredients">
-                <Input
-                  value={ingredientSearch}
-                  onChange={(event) => setIngredientSearch(event.target.value)}
-                  placeholder="Type oats or *milk"
-                />
-              </Field>
+            <div>
+              <div className="font-black">Ingredients</div>
+              <p className="text-sm font-semibold text-slate-500">Add empty rows, then search each row by ingredient name or type.</p>
             </div>
             <Button type="button" variant="secondary" icon={<Plus size={16} />} onClick={addRecipeIngredient}>Add row</Button>
           </div>
@@ -383,9 +388,11 @@ function RecipeModal({
             {form.ingredients.length === 0 && <p className="text-sm text-slate-500">No ingredients added.</p>}
             {form.ingredients.map((item, index) => (
               <div key={index} className="grid gap-2 rounded-lg bg-slate-50 p-3 sm:grid-cols-[1fr_110px_100px_40px]">
-                <Select value={item.ingredient_id} onChange={(e) => updateRecipeIngredient(index, { ingredient_id: e.target.value })}>
-                  {ingredients.map((ingredient) => <option key={ingredient.id} value={ingredient.id}>{ingredient.name}</option>)}
-                </Select>
+                <IngredientPicker
+                  ingredients={ingredients}
+                  selectedId={item.ingredient_id}
+                  onSelect={(ingredient) => updateRecipeIngredient(index, { ingredient_id: ingredient.id })}
+                />
                 <Input type="number" min="0.01" step="0.01" value={item.quantity} onChange={(e) => updateRecipeIngredient(index, { quantity: Number(e.target.value) })} />
                 <Input value={item.unit} onChange={(e) => updateRecipeIngredient(index, { unit: e.target.value })} />
                 <Button
@@ -408,6 +415,74 @@ function RecipeModal({
         </div>
       </form>
     </Modal>
+  );
+}
+
+function IngredientPicker({
+  ingredients,
+  selectedId,
+  onSelect,
+}: {
+  ingredients: Ingredient[];
+  selectedId: string;
+  onSelect: (ingredient: Ingredient) => void;
+}) {
+  const selected = ingredients.find((ingredient) => ingredient.id === selectedId);
+  const [query, setQuery] = useState(selected?.name ?? "");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setQuery(selected?.name ?? "");
+  }, [selected?.id]);
+
+  const matches = useMemo(() => {
+    const needle = query.trim();
+    const rows = needle
+      ? ingredients.filter((ingredient) =>
+          wildcardMatch(`${ingredient.name} ${ingredient.ingredient_type || ""}`, needle),
+        )
+      : ingredients;
+    return rows.slice(0, 8);
+  }, [ingredients, query]);
+
+  return (
+    <div className="relative">
+      <Input
+        value={query}
+        placeholder="Search ingredient"
+        onFocus={() => setOpen(true)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+      />
+      {open && matches.length > 0 && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-soft">
+          {matches.map((ingredient) => (
+            <button
+              key={ingredient.id}
+              type="button"
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onSelect(ingredient);
+                setQuery(ingredient.name);
+                setOpen(false);
+              }}
+            >
+              <span className="font-black">{ingredient.name}</span>
+              <span className="text-xs font-bold text-slate-500">{ingredient.ingredient_type || "other"}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && matches.length === 0 && (
+        <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500 shadow-soft">
+          No ingredient found
+        </div>
+      )}
+    </div>
   );
 }
 

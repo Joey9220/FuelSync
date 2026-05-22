@@ -7,6 +7,7 @@ export type TargetGoal = "recomp" | "fat_loss" | "maintenance" | "cut" | "lean_b
 export type Ingredient = {
   id: string;
   name: string;
+  ingredient_type: string;
   default_quantity: number;
   unit: string;
   kcal: number;

@@ -11,6 +11,7 @@ import {
 
 type IngredientPayload = {
   name: string;
+  ingredient_type: string;
   default_quantity: number;
   unit: string;
   kcal: number;
@@ -26,21 +27,36 @@ export const handler: Handler = async (event) => {
     const sql = db();
     const id = event.queryStringParameters?.id;
     const search = event.queryStringParameters?.search?.trim();
+    const ingredientType = event.queryStringParameters?.type?.trim();
 
     if (event.httpMethod === "GET") {
-      const rows = search
+      const rows = search && ingredientType
         ? await sql`
+          select *
+          from ingredients
+          where user_id = ${userId} and name ilike ${`%${search}%`} and ingredient_type = ${ingredientType}
+          order by name asc
+        `
+        : search
+          ? await sql`
             select *
             from ingredients
             where user_id = ${userId} and name ilike ${`%${search}%`}
             order by name asc
           `
-        : await sql`
-            select *
-            from ingredients
-            where user_id = ${userId}
-            order by name asc
-          `;
+          : ingredientType
+            ? await sql`
+              select *
+              from ingredients
+              where user_id = ${userId} and ingredient_type = ${ingredientType}
+              order by name asc
+            `
+            : await sql`
+              select *
+              from ingredients
+              where user_id = ${userId}
+              order by name asc
+            `;
       return ok({ ingredients: rows });
     }
 
@@ -48,10 +64,10 @@ export const handler: Handler = async (event) => {
       const payload = validateIngredient(parseJson<Record<string, unknown>>(event.body));
       const [ingredient] = await sql`
         insert into ingredients (
-          user_id, name, default_quantity, unit, kcal, protein_g, carbs_g, fat_g, notes
+          user_id, name, ingredient_type, default_quantity, unit, kcal, protein_g, carbs_g, fat_g, notes
         )
         values (
-          ${userId}, ${payload.name}, ${payload.default_quantity}, ${payload.unit},
+          ${userId}, ${payload.name}, ${payload.ingredient_type}, ${payload.default_quantity}, ${payload.unit},
           ${payload.kcal}, ${payload.protein_g}, ${payload.carbs_g}, ${payload.fat_g}, ${payload.notes}
         )
         returning *
@@ -66,6 +82,7 @@ export const handler: Handler = async (event) => {
         update ingredients
         set
           name = ${payload.name},
+          ingredient_type = ${payload.ingredient_type},
           default_quantity = ${payload.default_quantity},
           unit = ${payload.unit},
           kcal = ${payload.kcal},
@@ -100,6 +117,7 @@ export const handler: Handler = async (event) => {
 function validateIngredient(fields: Record<string, unknown>): IngredientPayload {
   return {
     name: requireString(fields, "name"),
+    ingredient_type: optionalString(fields, "ingredient_type") ?? "other",
     default_quantity: requirePositiveNumber(fields, "default_quantity"),
     unit: requireString(fields, "unit"),
     kcal: requireNonNegativeNumber(fields, "kcal"),
