@@ -104,7 +104,7 @@ export const handler = async (event) => {
     const responseText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!responseText) throw Object.assign(new Error("Gemini returned an empty response."), { statusCode: 502 });
 
-    const rawOutput = JSON.parse(responseText);
+    const rawOutput = parseAiOutput(responseText);
     const output = validateAiNutritionResponse(rawOutput, input);
 
     await saveSnapshot({ userId, input, output }).catch(() => {
@@ -154,6 +154,34 @@ async function parseGeminiResponse(response) {
   } catch {
     return { error: text.slice(0, 500) };
   }
+}
+
+function parseAiOutput(text) {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  const candidates = [cleaned];
+  const objectStart = cleaned.indexOf("{");
+  const objectEnd = cleaned.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    candidates.push(cleaned.slice(objectStart, objectEnd + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try the next normalized candidate.
+    }
+  }
+
+  throw Object.assign(
+    new Error(`Gemini returned malformed JSON: ${cleaned.slice(0, 240)}`),
+    { statusCode: 502 },
+  );
 }
 
 function validateInput(fields) {
