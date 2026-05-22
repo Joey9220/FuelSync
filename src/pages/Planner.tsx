@@ -8,10 +8,12 @@ import { ProgressBar } from "../components/ProgressBar";
 import { ErrorState, LoadingState } from "../components/State";
 import { addMacroTotals } from "../lib/calculations";
 import { label } from "../lib/constants";
-import { addDays, formatDayName, formatShortDate, normalizeDateKey, toDateKey, weekDays } from "../lib/date";
+import { addDays, formatDayName, formatShortDate, normalizeDateKey, toDateKey } from "../lib/date";
 import { useApi } from "../hooks/useApi";
 import { determineDayType } from "../services/dayPriority";
 import type { Activity, DailyMealSelection, MacroTarget, MacroTotals, Recipe, TargetGoal } from "../types";
+
+const dayHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function Planner() {
   const api = useApi();
@@ -26,9 +28,13 @@ export function Planner() {
   const [editing, setEditing] = useState<Activity | null | "new">(null);
   const [newDate, setNewDate] = useState<string | undefined>();
 
-  const days = useMemo(() => weekDays(anchor), [anchor]);
+  const days = useMemo(() => plannerDays(anchor), [anchor]);
   const from = toDateKey(days[0]);
-  const to = toDateKey(days[6]);
+  const to = toDateKey(days[days.length - 1]);
+  const monthLabel = useMemo(
+    () => new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(anchor),
+    [anchor],
+  );
 
   const load = () => {
     setLoading(true);
@@ -63,9 +69,9 @@ export function Planner() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-wide text-mint">Planner</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight">Training week</h1>
+          <h1 className="mt-1 text-3xl font-black tracking-tight">Training planner</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {formatShortDate(from)} to {formatShortDate(to)}
+            {monthLabel} - visible through {formatShortDate(to)}
           </p>
         </div>
         <div className="flex gap-2">
@@ -73,15 +79,15 @@ export function Planner() {
             variant="secondary"
             className="h-11 w-11 px-0"
             icon={<ChevronLeft size={18} />}
-            onClick={() => setAnchor(addDays(anchor, -7))}
-            aria-label="Previous week"
+            onClick={() => setAnchor(addMonths(anchor, -1))}
+            aria-label="Previous month"
           />
           <Button
             variant="secondary"
             className="h-11 w-11 px-0"
             icon={<ChevronRight size={18} />}
-            onClick={() => setAnchor(addDays(anchor, 7))}
-            aria-label="Next week"
+            onClick={() => setAnchor(addMonths(anchor, 1))}
+            aria-label="Next month"
           />
           <Button icon={<Plus size={18} />} onClick={() => addForDate(toDateKey(new Date()))}>
             Activity
@@ -94,9 +100,15 @@ export function Planner() {
         <LoadingState label="Loading planner..." />
       ) : (
         <div className="overflow-x-auto pb-2">
-          <div className="grid min-w-[1120px] grid-cols-7 gap-3 md:min-w-0">
+          <div className="grid min-w-[1260px] grid-cols-7 gap-2 md:min-w-0">
+            {dayHeaders.map((day) => (
+              <div key={day} className="rounded-lg bg-slate-100 px-3 py-2 text-center text-xs font-black uppercase tracking-wide text-slate-600">
+                {day}
+              </div>
+            ))}
             {days.map((day) => {
               const dateKey = toDateKey(day);
+              const inAnchorMonth = day.getMonth() === anchor.getMonth();
               const dayActivities = activities.filter((activity) => normalizeDateKey(activity.date) === dateKey);
               const dayType = determineDayType(dayActivities);
               const selectedRecipes = (mealSelectionsByDate[dateKey] ?? [])
@@ -105,18 +117,18 @@ export function Planner() {
               const ingested = addMacroTotals(selectedRecipes.map((recipe) => recipe.totals));
               const target = targets.find((item) => item.day_type === dayType);
               return (
-                <Card key={dateKey} className="flex min-h-[420px] flex-col p-0">
-                  <div className="border-b border-slate-100 p-4">
+                <Card key={dateKey} className={`flex min-h-[340px] flex-col p-0 ${inAnchorMonth ? "" : "bg-slate-50 opacity-80"}`}>
+                  <div className="border-b border-slate-100 p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="text-xs font-black uppercase tracking-wide text-mint">{formatDayName(day)}</div>
-                        <h2 className="mt-1 text-lg font-black">{formatShortDate(dateKey)}</h2>
+                        <h2 className="mt-1 text-base font-black">{formatShortDate(dateKey)}</h2>
                       </div>
                       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">
                         {dayActivities.length}
                       </span>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800">
                         {label(dayType)}
                       </span>
@@ -131,10 +143,10 @@ export function Planner() {
                     </div>
                   </div>
 
-                  <div className="flex-1 space-y-3 p-4">
+                  <div className="flex-1 space-y-3 p-3">
                     <MacroPlannerBlock ingested={ingested} target={target} targetGoal={targetGoal} />
                     {dayActivities.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
                         Rest day by default. Add a workout to update suggestions.
                       </div>
                     ) : (
@@ -245,4 +257,28 @@ function MacroPlannerBlock({
       </div>
     </div>
   );
+}
+
+function plannerDays(anchor: Date) {
+  const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const nextMonthFirstWeekEnd = addDays(startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1)), 6);
+  const start = startOfWeek(monthStart);
+  const totalDays = Math.ceil((daysBetween(start, nextMonthFirstWeekEnd) + 1) / 7) * 7;
+  return Array.from({ length: totalDays }, (_, index) => addDays(start, index));
+}
+
+function startOfWeek(date: Date) {
+  const current = new Date(date);
+  const day = current.getDay() || 7;
+  current.setDate(current.getDate() - day + 1);
+  current.setHours(0, 0, 0, 0);
+  return current;
+}
+
+function addMonths(date: Date, months: number) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
+function daysBetween(start: Date, end: Date) {
+  return Math.round((end.getTime() - start.getTime()) / 86400000);
 }
