@@ -82,6 +82,28 @@ export type DailyMealSelection = {
   created_at: string;
 };
 
+export type DailyRecipeIngredientOverride = {
+  ingredient_id: string;
+  quantity: number;
+  unit: string;
+};
+
+export type DailyFoodEntry = {
+  id: string;
+  date: string;
+  meal_type: MealType;
+  entry_type: "recipe" | "ingredient";
+  recipe_id: string | null;
+  ingredient_id: string | null;
+  quantity: number | null;
+  unit: string | null;
+  ingredient_overrides: DailyRecipeIngredientOverride[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type DailyFoodEntryPayload = Omit<DailyFoodEntry, "id" | "created_at" | "updated_at">;
+
 export type MacroTarget = {
   id: string;
   target_goal: TargetGoal;

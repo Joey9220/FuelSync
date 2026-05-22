@@ -47,7 +47,7 @@ export function RecipeSuggestionCard({
       {recipe.preparation_notes && <p className="mt-3 text-sm text-slate-500">{recipe.preparation_notes}</p>}
       <div className="mt-4 grid grid-cols-2 gap-2">
         <Button type="button" variant={selected ? "primary" : "secondary"} icon={<Check />} onClick={onSelect}>
-          {selected ? "Selected" : "Select"}
+          {selected ? "Deselect" : "Select"}
         </Button>
         <Button type="button" variant="ghost" icon={<RefreshCw />} onClick={onSwap ?? onSelect}>
           Swap

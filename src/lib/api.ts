@@ -5,6 +5,8 @@ import type {
   AiNutritionCoachSuggestion,
   BodyMetricsResponse,
   BodyMetric,
+  DailyFoodEntry,
+  DailyFoodEntryPayload,
   DailyMealSelection,
   Ingredient,
   MacroTarget,
@@ -91,6 +93,18 @@ export function createApiClient(getToken: () => Promise<string>) {
       request<{ selection: DailyMealSelection }>("/meal-selections", { method: "PUT", body: JSON.stringify(payload) }).then(
         (data) => data.selection,
       ),
+    getDailyFoodEntries: (date: string) =>
+      request<{ entries: DailyFoodEntry[] }>(`/daily-food-entries?date=${date}`).then((data) => data.entries),
+    createDailyFoodEntry: (payload: DailyFoodEntryPayload) =>
+      request<{ entry: DailyFoodEntry }>("/daily-food-entries", { method: "POST", body: JSON.stringify(payload) }).then(
+        (data) => data.entry,
+      ),
+    updateDailyFoodEntry: (id: string, payload: DailyFoodEntryPayload) =>
+      request<{ entry: DailyFoodEntry }>(`/daily-food-entries?id=${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }).then((data) => data.entry),
+    deleteDailyFoodEntry: (id: string) => request<void>(`/daily-food-entries?id=${id}`, { method: "DELETE" }),
     getMacroTargets: (goal?: TargetGoal) =>
       request<{ targets: MacroTarget[] }>(`/macro-targets${goal ? `?goal=${goal}` : ""}`).then((data) => data.targets),
     saveMacroTarget: (payload: MacroTargetPayload) =>

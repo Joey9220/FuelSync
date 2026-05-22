@@ -1,4 +1,4 @@
-import { CalendarDays, ChefHat, Dumbbell, SlidersHorizontal, Sparkles } from "lucide-react";
+import { CalendarDays, ChefHat, Dumbbell, Plus, ShoppingBasket, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
@@ -6,12 +6,12 @@ import { ActivityFormModal } from "../components/ActivityFormModal";
 import { AiNutritionCoachPanel } from "../components/AiNutritionCoachPanel";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
-import { Field, Input } from "../components/FormField";
+import { Field, Input, Select } from "../components/FormField";
 import { MacroBadges } from "../components/MacroBadges";
 import { ProgressBar } from "../components/ProgressBar";
 import { RecipeSuggestionCard } from "../components/RecipeSuggestionCard";
 import { EmptyState, ErrorState, LoadingState } from "../components/State";
-import { addMacroTotals } from "../lib/calculations";
+import { addMacroTotals, calculateRecipeTotals, formatTotals } from "../lib/calculations";
 import { dayTypes, label, mealTypes } from "../lib/constants";
 import { formatShortDate, todayKey } from "../lib/date";
 import { useApi } from "../hooks/useApi";
@@ -24,10 +24,14 @@ import type {
   AiCoachGoal,
   AiNutritionCoachInput,
   AiNutritionCoachSuggestion,
+  DailyFoodEntry,
+  DailyFoodEntryPayload,
   DailyMealSelection,
+  Ingredient,
   MacroTarget,
   MealType,
   Recipe,
+  RecipeIngredient,
   RecommendedRecipe,
   TargetGoal,
 } from "../types";
@@ -38,7 +42,9 @@ export function DailySuggestions() {
   const [date, setDate] = useState(todayKey());
   const [activities, setActivities] = useState<Activity[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [selections, setSelections] = useState<DailyMealSelection[]>([]);
+  const [foodEntries, setFoodEntries] = useState<DailyFoodEntry[]>([]);
   const [targets, setTargets] = useState<MacroTarget[]>([]);
   const [targetGoal, setTargetGoal] = useState<TargetGoal>("maintenance");
   const [loading, setLoading] = useState(true);
@@ -54,12 +60,45 @@ export function DailySuggestions() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.getActivities({ date }), api.getRecipes(), api.getMealSelections(date), api.getUserPreferences()])
-      .then(async ([activityRows, recipeRows, selectionRows, preferences]) => {
+    Promise.all([
+      api.getActivities({ date }),
+      api.getRecipes(),
+      api.getIngredients(),
+      api.getMealSelections(date),
+      api.getDailyFoodEntries(date),
+      api.getUserPreferences(),
+    ])
+      .then(async ([activityRows, recipeRows, ingredientRows, selectionRows, entryRows, preferences]) => {
         const targetRows = await api.getMacroTargets(preferences.target_goal);
+        const migratedEntries = entryRows.length
+          ? entryRows
+          : await Promise.all(
+              selectionRows
+                .filter((selection) => selection.selected_recipe_id)
+                .map((selection) => {
+                  const recipe = recipeRows.find((item) => item.id === selection.selected_recipe_id);
+                  if (!recipe) return null;
+                  return api.createDailyFoodEntry({
+                    date,
+                    meal_type: selection.meal_type,
+                    entry_type: "recipe",
+                    recipe_id: recipe.id,
+                    ingredient_id: null,
+                    quantity: null,
+                    unit: null,
+                    ingredient_overrides: recipe.ingredients.map((item) => ({
+                      ingredient_id: item.ingredient_id,
+                      quantity: Number(item.quantity),
+                      unit: item.unit,
+                    })),
+                  });
+                }),
+            ).then((entries) => entries.filter((entry): entry is DailyFoodEntry => Boolean(entry)));
         setActivities(activityRows);
         setRecipes(recipeRows);
+        setIngredients(ingredientRows);
         setSelections(selectionRows);
+        setFoodEntries(migratedEntries);
         setTargets(targetRows);
         setTargetGoal(preferences.target_goal);
       })
@@ -80,10 +119,11 @@ export function DailySuggestions() {
       ) as Record<MealType, RecommendedRecipe[]>,
     [dayType, recipes, timing],
   );
-  const selectedRecipes = selections
-    .map((selection) => recipes.find((recipe) => recipe.id === selection.selected_recipe_id))
-    .filter((recipe): recipe is Recipe => Boolean(recipe));
-  const totals = addMacroTotals(selectedRecipes.map((recipe) => recipe.totals));
+  const entryTotals = useMemo(
+    () => foodEntries.map((entry) => calculateFoodEntryTotals(entry, recipes, ingredients)),
+    [foodEntries, recipes, ingredients],
+  );
+  const totals = addMacroTotals(entryTotals);
   const planRecipes = mealTypes
     .map((mealType) => selections.find((selection) => selection.meal_type === mealType)?.selected_recipe_id
       ? recipes.find((recipe) => recipe.id === selections.find((selection) => selection.meal_type === mealType)?.selected_recipe_id)
@@ -107,6 +147,38 @@ export function DailySuggestions() {
   );
 
   async function selectRecipe(mealType: MealType, recipeId: string) {
+    const existing = foodEntries.find(
+      (entry) => entry.meal_type === mealType && entry.entry_type === "recipe" && entry.recipe_id === recipeId,
+    );
+
+    if (existing) {
+      setFoodEntries((current) => current.filter((entry) => entry.id !== existing.id));
+      await api.deleteDailyFoodEntry(existing.id);
+      if (selections.find((selection) => selection.meal_type === mealType)?.selected_recipe_id === recipeId) {
+        const saved = await api.saveMealSelection({ date, meal_type: mealType, selected_recipe_id: null });
+        setSelections((current) => [...current.filter((item) => item.meal_type !== mealType), saved]);
+      }
+      return;
+    }
+
+    const recipe = recipes.find((item) => item.id === recipeId);
+    if (!recipe) return;
+    const savedEntry = await api.createDailyFoodEntry({
+      date,
+      meal_type: mealType,
+      entry_type: "recipe",
+      recipe_id: recipeId,
+      ingredient_id: null,
+      quantity: null,
+      unit: null,
+      ingredient_overrides: recipe.ingredients.map((item) => ({
+        ingredient_id: item.ingredient_id,
+        quantity: Number(item.quantity),
+        unit: item.unit,
+      })),
+    });
+    setFoodEntries((current) => [...current, savedEntry]);
+
     const optimistic = {
       id: `${date}-${mealType}`,
       date,
@@ -119,14 +191,44 @@ export function DailySuggestions() {
     setSelections((current) => [...current.filter((item) => item.meal_type !== mealType), saved]);
   }
 
+  async function addFoodEntry(payload: DailyFoodEntryPayload) {
+    const savedEntry = await api.createDailyFoodEntry(payload);
+    setFoodEntries((current) => [...current, savedEntry]);
+    if (payload.entry_type === "recipe" && payload.recipe_id) {
+      const saved = await api.saveMealSelection({ date, meal_type: payload.meal_type, selected_recipe_id: payload.recipe_id });
+      setSelections((current) => [...current.filter((item) => item.meal_type !== payload.meal_type), saved]);
+    }
+  }
+
+  async function updateFoodEntry(id: string, payload: DailyFoodEntryPayload) {
+    const savedEntry = await api.updateDailyFoodEntry(id, payload);
+    setFoodEntries((current) => current.map((entry) => (entry.id === savedEntry.id ? savedEntry : entry)));
+  }
+
+  async function deleteFoodEntry(entry: DailyFoodEntry) {
+    setFoodEntries((current) => current.filter((item) => item.id !== entry.id));
+    await api.deleteDailyFoodEntry(entry.id);
+    if (
+      entry.entry_type === "recipe" &&
+      selections.find((selection) => selection.meal_type === entry.meal_type)?.selected_recipe_id === entry.recipe_id
+    ) {
+      const saved = await api.saveMealSelection({ date, meal_type: entry.meal_type, selected_recipe_id: null });
+      setSelections((current) => [...current.filter((item) => item.meal_type !== entry.meal_type), saved]);
+    }
+  }
+
   async function usePlanForToday() {
     setSavingPlan(true);
     setError("");
     try {
       for (const mealType of mealTypes) {
+        const loggedId = foodEntries.find((entry) => entry.meal_type === mealType && entry.entry_type === "recipe")?.recipe_id;
         const selectedId = selections.find((selection) => selection.meal_type === mealType)?.selected_recipe_id;
-        const recipeId = selectedId ?? recommendations[mealType][0]?.id;
-        if (recipeId) await selectRecipe(mealType, recipeId);
+        const recipeId = loggedId ?? selectedId ?? recommendations[mealType][0]?.id;
+        const isLogged = foodEntries.some(
+          (entry) => entry.meal_type === mealType && entry.entry_type === "recipe" && entry.recipe_id === recipeId,
+        );
+        if (recipeId && !isLogged) await selectRecipe(mealType, recipeId);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save today's plan.");
@@ -235,16 +337,27 @@ export function DailySuggestions() {
             ) : (
               <div className="space-y-4">
                 {mealTypes.map((mealType) => {
-                  const selectedId = selections.find((selection) => selection.meal_type === mealType)?.selected_recipe_id;
+                  const selectedIds = new Set(
+                    foodEntries
+                      .filter((entry) => entry.meal_type === mealType && entry.entry_type === "recipe" && entry.recipe_id)
+                      .map((entry) => entry.recipe_id as string),
+                  );
                   const options = recommendations[mealType];
                   return (
                     <MealBlock
                       key={mealType}
+                      date={date}
                       mealType={mealType}
                       timingLabel={label(timing[mealType])}
                       options={options}
-                      selectedId={selectedId}
+                      selectedIds={selectedIds}
+                      entries={foodEntries.filter((entry) => entry.meal_type === mealType)}
+                      recipes={recipes.filter((recipe) => recipe.meal_type === mealType)}
+                      ingredients={ingredients}
                       onSelect={(recipeId) => selectRecipe(mealType, recipeId)}
+                      onAddEntry={addFoodEntry}
+                      onUpdateEntry={updateFoodEntry}
+                      onDeleteEntry={deleteFoodEntry}
                       onAddRecipe={() => navigate("/recipes")}
                     />
                   );
@@ -257,17 +370,19 @@ export function DailySuggestions() {
             <div className="grid gap-3 lg:grid-cols-[0.8fr_1.2fr]">
               <Card>
                 <div className="mb-3 text-sm font-black uppercase tracking-wide text-slate-500">Current selected meals</div>
-                {selectedRecipes.length === 0 ? (
-                  <p className="text-sm font-semibold text-slate-500">No meals selected yet. Use the plan or choose meals below.</p>
+                {foodEntries.length === 0 ? (
+                  <p className="text-sm font-semibold text-slate-500">No food logged yet. Use the plan or add recipes and ingredients below.</p>
                 ) : (
                   <div className="space-y-2">
-                    {selections.map((selection) => {
-                      const recipe = recipes.find((item) => item.id === selection.selected_recipe_id);
-                      if (!recipe) return null;
+                    {foodEntries.map((entry) => {
+                      const recipe = entry.recipe_id ? recipes.find((item) => item.id === entry.recipe_id) : null;
+                      const ingredient = entry.ingredient_id ? ingredients.find((item) => item.id === entry.ingredient_id) : null;
                       return (
-                        <div key={selection.meal_type} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-                          <span className="font-black">{label(selection.meal_type)}</span>
-                          <span className="truncate pl-3 text-slate-600">{recipe.name}</span>
+                        <div key={entry.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                          <span className="font-black">{label(entry.meal_type)}</span>
+                          <span className="truncate pl-3 text-slate-600">
+                            {recipe?.name ?? ingredient?.name ?? "Food entry"}
+                          </span>
                         </div>
                       );
                     })}
@@ -338,20 +453,85 @@ export function DailySuggestions() {
 }
 
 function MealBlock({
+  date,
   mealType,
   timingLabel,
   options,
-  selectedId,
+  selectedIds,
+  entries,
+  recipes,
+  ingredients,
   onSelect,
+  onAddEntry,
+  onUpdateEntry,
+  onDeleteEntry,
   onAddRecipe,
 }: {
+  date: string;
   mealType: MealType;
   timingLabel: string;
   options: RecommendedRecipe[];
-  selectedId: string | null | undefined;
+  selectedIds: Set<string>;
+  entries: DailyFoodEntry[];
+  recipes: Recipe[];
+  ingredients: Ingredient[];
   onSelect: (recipeId: string) => void;
+  onAddEntry: (payload: DailyFoodEntryPayload) => void;
+  onUpdateEntry: (id: string, payload: DailyFoodEntryPayload) => void;
+  onDeleteEntry: (entry: DailyFoodEntry) => void;
   onAddRecipe: () => void;
 }) {
+  const [recipeId, setRecipeId] = useState(recipes[0]?.id ?? "");
+  const [ingredientId, setIngredientId] = useState(ingredients[0]?.id ?? "");
+  const selectedIngredient = ingredients.find((ingredient) => ingredient.id === ingredientId);
+  const [ingredientQuantity, setIngredientQuantity] = useState(selectedIngredient?.default_quantity ?? 0);
+
+  useEffect(() => {
+    if (!recipeId && recipes[0]) setRecipeId(recipes[0].id);
+  }, [recipeId, recipes]);
+
+  useEffect(() => {
+    if (!ingredientId && ingredients[0]) setIngredientId(ingredients[0].id);
+  }, [ingredientId, ingredients]);
+
+  useEffect(() => {
+    if (selectedIngredient) setIngredientQuantity(Number(selectedIngredient.default_quantity));
+  }, [selectedIngredient?.id]);
+
+  const addRecipeFromLibrary = () => {
+    const recipe = recipes.find((item) => item.id === recipeId);
+    if (!recipe) return;
+    onAddEntry({
+      date,
+      meal_type: mealType,
+      entry_type: "recipe",
+      recipe_id: recipe.id,
+      ingredient_id: null,
+      quantity: null,
+      unit: null,
+      ingredient_overrides: recipe.ingredients.map((item) => ({
+        ingredient_id: item.ingredient_id,
+        quantity: Number(item.quantity),
+        unit: item.unit,
+      })),
+    });
+  };
+
+  const addIngredientFromLibrary = () => {
+    const ingredient = ingredients.find((item) => item.id === ingredientId);
+    if (!ingredient) return;
+    onAddEntry({
+      date,
+      meal_type: mealType,
+      entry_type: "ingredient",
+      recipe_id: null,
+      ingredient_id: ingredient.id,
+      quantity: Number(ingredientQuantity || ingredient.default_quantity),
+      unit: ingredient.unit,
+      ingredient_overrides: [],
+    });
+  };
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -374,7 +554,7 @@ function MealBlock({
             <RecipeSuggestionCard
               key={recipe.id}
               recipe={recipe}
-              selected={selectedId === recipe.id}
+              selected={selectedIds.has(recipe.id)}
               rank={index + 1}
               onSelect={() => onSelect(recipe.id)}
               onSwap={() => onSelect(options[(index + 1) % options.length]?.id ?? recipe.id)}
@@ -382,7 +562,147 @@ function MealBlock({
           ))}
         </div>
       )}
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <Card className="border-slate-200 shadow-none">
+          <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-500">Add recipe</div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <Select value={recipeId} onChange={(event) => setRecipeId(event.target.value)} disabled={recipes.length === 0}>
+              {recipes.map((recipe) => <option key={recipe.id} value={recipe.id}>{recipe.name}</option>)}
+            </Select>
+            <Button type="button" variant="secondary" icon={<Plus />} onClick={addRecipeFromLibrary} disabled={!recipeId}>
+              Recipe
+            </Button>
+          </div>
+        </Card>
+        <Card className="border-slate-200 shadow-none">
+          <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-500">Add ingredient</div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
+            <Select value={ingredientId} onChange={(event) => setIngredientId(event.target.value)} disabled={ingredients.length === 0}>
+              {ingredients.map((ingredient) => <option key={ingredient.id} value={ingredient.id}>{ingredient.name}</option>)}
+            </Select>
+            <Input
+              type="number"
+              min="0"
+              step="0.1"
+              value={ingredientQuantity}
+              onChange={(event) => setIngredientQuantity(Number(event.target.value))}
+            />
+            <Button type="button" variant="secondary" icon={<ShoppingBasket />} onClick={addIngredientFromLibrary} disabled={!ingredientId}>
+              Ingredient
+            </Button>
+          </div>
+        </Card>
+      </div>
+      {entries.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <div className="text-sm font-black uppercase tracking-wide text-slate-500">Logged for {label(mealType)}</div>
+          {entries.map((entry) => (
+            <FoodEntryEditor
+              key={entry.id}
+              entry={entry}
+              recipes={recipes}
+              ingredients={ingredients}
+              onUpdate={onUpdateEntry}
+              onDelete={onDeleteEntry}
+            />
+          ))}
+        </div>
+      )}
     </section>
+  );
+}
+
+function FoodEntryEditor({
+  entry,
+  recipes,
+  ingredients,
+  onUpdate,
+  onDelete,
+}: {
+  entry: DailyFoodEntry;
+  recipes: Recipe[];
+  ingredients: Ingredient[];
+  onUpdate: (id: string, payload: DailyFoodEntryPayload) => void;
+  onDelete: (entry: DailyFoodEntry) => void;
+}) {
+  const recipe = entry.recipe_id ? recipes.find((item) => item.id === entry.recipe_id) : null;
+  const ingredient = entry.ingredient_id ? ingredients.find((item) => item.id === entry.ingredient_id) : null;
+
+  const updateIngredientEntry = (quantity: number) => {
+    if (!ingredient || !Number.isFinite(quantity) || quantity <= 0) return;
+    onUpdate(entry.id, {
+      date: normalizeEntryDate(entry.date),
+      meal_type: entry.meal_type,
+      entry_type: "ingredient",
+      recipe_id: null,
+      ingredient_id: ingredient.id,
+      quantity,
+      unit: entry.unit ?? ingredient.unit,
+      ingredient_overrides: [],
+    });
+  };
+
+  const updateRecipeIngredient = (item: RecipeIngredient, quantity: number) => {
+    if (!recipe || !Number.isFinite(quantity) || quantity <= 0) return;
+    const overrides = recipe.ingredients.map((ingredientItem) => {
+      const existing = entry.ingredient_overrides.find((override) => override.ingredient_id === ingredientItem.ingredient_id);
+      return {
+        ingredient_id: ingredientItem.ingredient_id,
+        quantity: ingredientItem.ingredient_id === item.ingredient_id ? quantity : Number(existing?.quantity ?? ingredientItem.quantity),
+        unit: existing?.unit ?? ingredientItem.unit,
+      };
+    });
+    onUpdate(entry.id, {
+      date: normalizeEntryDate(entry.date),
+      meal_type: entry.meal_type,
+      entry_type: "recipe",
+      recipe_id: recipe.id,
+      ingredient_id: null,
+      quantity: null,
+      unit: null,
+      ingredient_overrides: overrides,
+    });
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <div className="font-black">{recipe?.name ?? ingredient?.name ?? "Food entry"}</div>
+          <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{entry.entry_type}</div>
+        </div>
+        <Button type="button" variant="ghost" className="h-9 w-9 px-0" aria-label="Remove entry" icon={<Trash2 />} onClick={() => onDelete(entry)} />
+      </div>
+      {recipe && (
+        <div className="grid gap-2 md:grid-cols-2">
+          {recipe.ingredients.map((item) => {
+            const override = entry.ingredient_overrides.find((entryItem) => entryItem.ingredient_id === item.ingredient_id);
+            return (
+              <Field key={item.ingredient_id} label={`${item.name ?? "Ingredient"} (${override?.unit ?? item.unit})`}>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  defaultValue={Number(override?.quantity ?? item.quantity)}
+                  onBlur={(event) => updateRecipeIngredient(item, Number(event.target.value))}
+                />
+              </Field>
+            );
+          })}
+        </div>
+      )}
+      {ingredient && (
+        <Field label={`${ingredient.name} (${entry.unit ?? ingredient.unit})`}>
+          <Input
+            type="number"
+            min="0"
+            step="0.1"
+            defaultValue={Number(entry.quantity ?? ingredient.default_quantity)}
+            onBlur={(event) => updateIngredientEntry(Number(event.target.value))}
+          />
+        </Field>
+      )}
+    </div>
   );
 }
 
@@ -505,6 +825,40 @@ function mapGoal(goal: TargetGoal): AiCoachGoal {
 function mapIntensity(intensity: Activity["intensity"]): "low" | "moderate" | "high" | null {
   if (intensity === "medium") return "moderate";
   return intensity;
+}
+
+function calculateFoodEntryTotals(entry: DailyFoodEntry, recipes: Recipe[], ingredients: Ingredient[]) {
+  if (entry.entry_type === "recipe" && entry.recipe_id) {
+    const recipe = recipes.find((item) => item.id === entry.recipe_id);
+    if (!recipe) return { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+    const items = recipe.ingredients.map((item) => {
+      const override = entry.ingredient_overrides.find((entryItem) => entryItem.ingredient_id === item.ingredient_id);
+      return {
+        ...item,
+        quantity: Number(override?.quantity ?? item.quantity),
+        unit: override?.unit ?? item.unit,
+      };
+    });
+    return formatTotals(calculateRecipeTotals(items, ingredients));
+  }
+
+  if (entry.entry_type === "ingredient" && entry.ingredient_id) {
+    const ingredient = ingredients.find((item) => item.id === entry.ingredient_id);
+    if (!ingredient) return { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+    const scale = Number(entry.quantity ?? 0) / Number(ingredient.default_quantity);
+    return formatTotals({
+      kcal: Number(ingredient.kcal) * scale,
+      protein_g: Number(ingredient.protein_g) * scale,
+      carbs_g: Number(ingredient.carbs_g) * scale,
+      fat_g: Number(ingredient.fat_g) * scale,
+    });
+  }
+
+  return { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+}
+
+function normalizeEntryDate(date: string) {
+  return date.slice(0, 10);
 }
 
 function defaultTarget(dayType: string): MacroTarget {
