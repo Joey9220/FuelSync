@@ -1,4 +1,4 @@
-import { Check, RefreshCw } from "lucide-react";
+import { Check, Info, RefreshCw } from "lucide-react";
 import { Button } from "./Button";
 import { Card } from "./Card";
 import { MacroBadges } from "./MacroBadges";
@@ -7,12 +7,14 @@ import type { RecommendedRecipe } from "../types";
 export function RecipeSuggestionCard({
   recipe,
   selected,
+  onDetails,
   onSelect,
   onSwap,
   rank,
 }: {
   recipe: RecommendedRecipe;
   selected: boolean;
+  onDetails?: () => void;
   onSelect: () => void;
   onSwap?: () => void;
   rank?: number;
@@ -45,7 +47,12 @@ export function RecipeSuggestionCard({
         </div>
       )}
       {recipe.preparation_notes && <p className="mt-3 text-sm text-slate-500">{recipe.preparation_notes}</p>}
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className={`mt-4 grid gap-2 ${onDetails ? "grid-cols-3" : "grid-cols-2"}`}>
+        {onDetails && (
+          <Button type="button" variant="secondary" icon={<Info />} onClick={onDetails}>
+            Details
+          </Button>
+        )}
         <Button type="button" variant={selected ? "primary" : "secondary"} icon={<Check />} onClick={onSelect}>
           {selected ? "Deselect" : "Select"}
         </Button>

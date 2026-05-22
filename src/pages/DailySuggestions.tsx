@@ -8,6 +8,7 @@ import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Field, Input, Select } from "../components/FormField";
 import { MacroBadges } from "../components/MacroBadges";
+import { Modal } from "../components/Modal";
 import { ProgressBar } from "../components/ProgressBar";
 import { RecipeSuggestionCard } from "../components/RecipeSuggestionCard";
 import { EmptyState, ErrorState, LoadingState } from "../components/State";
@@ -45,6 +46,7 @@ export function DailySuggestions() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [selections, setSelections] = useState<DailyMealSelection[]>([]);
   const [foodEntries, setFoodEntries] = useState<DailyFoodEntry[]>([]);
+  const [detailRecipe, setDetailRecipe] = useState<Recipe | null>(null);
   const [targets, setTargets] = useState<MacroTarget[]>([]);
   const [targetGoal, setTargetGoal] = useState<TargetGoal>("maintenance");
   const [loading, setLoading] = useState(true);
@@ -364,6 +366,7 @@ export function DailySuggestions() {
                       recipes={recipes.filter((recipe) => recipe.meal_type === mealType)}
                       ingredients={ingredients}
                       onToggle={() => toggleMealBlock(mealType)}
+                      onDetails={(recipe) => setDetailRecipe(recipe)}
                       onSelect={(recipeId) => selectRecipe(mealType, recipeId)}
                       onAddEntry={addFoodEntry}
                       onUpdateEntry={updateFoodEntry}
@@ -458,6 +461,8 @@ export function DailySuggestions() {
           }}
         />
       )}
+
+      {detailRecipe && <RecipeDetailsModal recipe={detailRecipe} onClose={() => setDetailRecipe(null)} />}
     </div>
   );
 }
@@ -473,6 +478,7 @@ function MealBlock({
   recipes,
   ingredients,
   onToggle,
+  onDetails,
   onSelect,
   onAddEntry,
   onUpdateEntry,
@@ -489,6 +495,7 @@ function MealBlock({
   recipes: Recipe[];
   ingredients: Ingredient[];
   onToggle: () => void;
+  onDetails: (recipe: Recipe) => void;
   onSelect: (recipeId: string) => void;
   onAddEntry: (payload: DailyFoodEntryPayload) => void;
   onUpdateEntry: (id: string, payload: DailyFoodEntryPayload) => void;
@@ -582,6 +589,7 @@ function MealBlock({
                   recipe={recipe}
                   selected={selectedIds.has(recipe.id)}
                   rank={index + 1}
+                  onDetails={() => onDetails(recipe)}
                   onSelect={() => onSelect(recipe.id)}
                   onSwap={() => onSelect(options[(index + 1) % options.length]?.id ?? recipe.id)}
                 />
@@ -734,6 +742,48 @@ function FoodEntryEditor({
   );
 }
 
+function RecipeDetailsModal({ recipe, onClose }: { recipe: Recipe; onClose: () => void }) {
+  return (
+    <Modal title={recipe.name} onClose={onClose}>
+      <div className="space-y-4">
+        <MacroBadges totals={recipe.totals} />
+        <div className="overflow-x-auto">
+          <table className="min-w-[620px] w-full border-collapse bg-white text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="border border-slate-200 px-3 py-2 text-left">Ingredient</th>
+                <th className="border border-slate-200 px-3 py-2 text-right">Quantity</th>
+                <th className="border border-slate-200 px-3 py-2 text-left">Unit</th>
+                <th className="border border-slate-200 px-3 py-2 text-right">kcal</th>
+                <th className="border border-slate-200 px-3 py-2 text-right">P</th>
+                <th className="border border-slate-200 px-3 py-2 text-right">F</th>
+                <th className="border border-slate-200 px-3 py-2 text-right">C</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recipe.ingredients.map((item) => {
+                const totals = ingredientTotals(item);
+                return (
+                  <tr key={item.id || item.ingredient_id} className="hover:bg-slate-50">
+                    <td className="border border-slate-200 px-3 py-2 font-bold">{item.name ?? "Ingredient"}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right tabular-nums">{round(Number(item.quantity))}</td>
+                    <td className="border border-slate-200 px-3 py-2">{item.unit}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right font-black tabular-nums text-amber-900">{round(totals.kcal)}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right font-black tabular-nums text-emerald-900">{round(totals.protein_g)}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right font-black tabular-nums text-rose-900">{round(totals.fat_g)}</td>
+                    <td className="border border-slate-200 px-3 py-2 text-right font-black tabular-nums text-sky-900">{round(totals.carbs_g)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {recipe.preparation_notes && <p className="text-sm font-semibold text-slate-600">{recipe.preparation_notes}</p>}
+      </div>
+    </Modal>
+  );
+}
+
 function Collapsible({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: () => void; children: ReactNode }) {
   return (
     <section className="space-y-3">
@@ -883,6 +933,20 @@ function calculateFoodEntryTotals(entry: DailyFoodEntry, recipes: Recipe[], ingr
   }
 
   return { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+}
+
+function ingredientTotals(item: RecipeIngredient) {
+  const scale = Number(item.quantity || 0) / Number(item.default_quantity || item.quantity || 1);
+  return {
+    kcal: Number(item.kcal || 0) * scale,
+    protein_g: Number(item.protein_g || 0) * scale,
+    fat_g: Number(item.fat_g || 0) * scale,
+    carbs_g: Number(item.carbs_g || 0) * scale,
+  };
+}
+
+function round(value: number) {
+  return Math.round(Number(value) * 10) / 10;
 }
 
 function normalizeEntryDate(date: string) {
