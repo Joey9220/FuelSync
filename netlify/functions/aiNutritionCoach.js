@@ -93,26 +93,11 @@ export const handler = async (event) => {
     if (!apiKey) throw Object.assign(new Error("Gemini API key is not configured."), { statusCode: 500 });
 
     const input = validateInput(JSON.parse(event.body));
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/${geminiApiVersion}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema,
-            temperature: 0.25,
-            maxOutputTokens: 1800,
-          },
-        }),
-      },
-    );
-
-    const geminiResponse = await response.json();
+    const response = await callGemini(apiKey, input);
+    const geminiResponse = await parseGeminiResponse(response);
     if (!response.ok) {
-      throw Object.assign(new Error(geminiResponse.error?.message || "Gemini request failed."), { statusCode: 502 });
+      const message = geminiResponse.error?.message || geminiResponse.error || "Gemini request failed.";
+      throw Object.assign(new Error(`Gemini request failed: ${message}`), { statusCode: 502 });
     }
 
     const responseText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -130,6 +115,41 @@ export const handler = async (event) => {
     return fail(error);
   }
 };
+
+async function callGemini(apiKey, input) {
+  try {
+    return await fetch(
+      `https://generativelanguage.googleapis.com/${geminiApiVersion}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema,
+            temperature: 0.25,
+            maxOutputTokens: 1800,
+          },
+        }),
+      },
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown network error.";
+    throw Object.assign(new Error(`Could not connect to Gemini: ${detail}`), { statusCode: 502 });
+  }
+}
+
+async function parseGeminiResponse(response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text.slice(0, 500) };
+  }
+}
 
 function validateInput(fields) {
   const goal = requireEnum(fields.goal, goals, "goal");

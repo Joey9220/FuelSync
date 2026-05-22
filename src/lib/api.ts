@@ -38,7 +38,7 @@ export function createApiClient(getToken: () => Promise<string>) {
 
     if (response.status === 204) return undefined as T;
 
-    const data = await response.json();
+    const data = await parseResponseBody(response);
     if (!response.ok) {
       throw new Error(data.error || "Request failed.");
     }
@@ -142,6 +142,19 @@ export function createApiClient(getToken: () => Promise<string>) {
         })),
       })),
   };
+}
+
+async function parseResponseBody(response: Response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      error: text.slice(0, 500) || `Request failed with status ${response.status}.`,
+    };
+  }
 }
 
 function nullableNumber(value: unknown) {
