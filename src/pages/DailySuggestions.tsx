@@ -209,8 +209,16 @@ export function DailySuggestions() {
   }
 
   async function updateFoodEntry(id: string, payload: DailyFoodEntryPayload) {
-    const savedEntry = await api.updateDailyFoodEntry(id, payload);
-    setFoodEntries((current) => current.map((entry) => (entry.id === savedEntry.id ? savedEntry : entry)));
+    setFoodEntries((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, ...payload, updated_at: new Date().toISOString() } : entry)),
+    );
+    try {
+      const savedEntry = await api.updateDailyFoodEntry(id, payload);
+      setFoodEntries((current) => current.map((entry) => (entry.id === savedEntry.id ? savedEntry : entry)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update food entry.");
+      load();
+    }
   }
 
   async function deleteFoodEntry(entry: DailyFoodEntry) {
@@ -628,18 +636,15 @@ function MealBlock({
             </Card>
           </div>
           {entries.length > 0 && (
-            <div className="mt-4 space-y-3">
+            <div className="mt-4">
               <div className="text-sm font-black uppercase tracking-wide text-slate-500">Logged for {label(mealType)}</div>
-              {entries.map((entry) => (
-                <FoodEntryEditor
-                  key={entry.id}
-                  entry={entry}
-                  recipes={recipes}
-                  ingredients={ingredients}
-                  onUpdate={onUpdateEntry}
-                  onDelete={onDeleteEntry}
-                />
-              ))}
+              <LoggedFoodTable
+                entries={entries}
+                recipes={recipes}
+                ingredients={ingredients}
+                onUpdate={onUpdateEntry}
+                onDelete={onDeleteEntry}
+              />
             </div>
           )}
         </div>
@@ -648,7 +653,52 @@ function MealBlock({
   );
 }
 
-function FoodEntryEditor({
+function LoggedFoodTable({
+  entries,
+  recipes,
+  ingredients,
+  onUpdate,
+  onDelete,
+}: {
+  entries: DailyFoodEntry[];
+  recipes: Recipe[];
+  ingredients: Ingredient[];
+  onUpdate: (id: string, payload: DailyFoodEntryPayload) => void;
+  onDelete: (entry: DailyFoodEntry) => void;
+}) {
+  return (
+    <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <table className="min-w-[760px] w-full border-collapse text-sm">
+        <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="border-b border-slate-200 px-3 py-2 text-left">Item</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">Qty</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-left">Unit</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">kcal</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">P</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">C</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">F</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <LoggedFoodRows
+              key={entry.id}
+              entry={entry}
+              recipes={recipes}
+              ingredients={ingredients}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LoggedFoodRows({
   entry,
   recipes,
   ingredients,
@@ -663,6 +713,7 @@ function FoodEntryEditor({
 }) {
   const recipe = entry.recipe_id ? recipes.find((item) => item.id === entry.recipe_id) : null;
   const ingredient = entry.ingredient_id ? ingredients.find((item) => item.id === entry.ingredient_id) : null;
+  const totals = calculateFoodEntryTotals(entry, recipes, ingredients);
 
   const updateIngredientEntry = (quantity: number) => {
     if (!ingredient || !Number.isFinite(quantity) || quantity <= 0) return;
@@ -700,45 +751,89 @@ function FoodEntryEditor({
     });
   };
 
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div>
-          <div className="font-black">{recipe?.name ?? ingredient?.name ?? "Food entry"}</div>
-          <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{entry.entry_type}</div>
-        </div>
-        <Button type="button" variant="ghost" className="h-9 w-9 px-0" aria-label="Remove entry" icon={<Trash2 />} onClick={() => onDelete(entry)} />
-      </div>
-      {recipe && (
-        <div className="grid gap-2 md:grid-cols-2">
-          {recipe.ingredients.map((item) => {
-            const override = entry.ingredient_overrides.find((entryItem) => entryItem.ingredient_id === item.ingredient_id);
-            return (
-              <Field key={item.ingredient_id} label={`${item.name ?? "Ingredient"} (${override?.unit ?? item.unit})`}>
+  if (recipe) {
+    return (
+      <>
+        <tr className="bg-slate-50">
+          <td className="border-b border-slate-200 px-3 py-2 font-black">{recipe.name}</td>
+          <td className="border-b border-slate-200 px-3 py-2 text-right font-bold tabular-nums">{round(recipeWeight(entry, recipe))}</td>
+          <td className="border-b border-slate-200 px-3 py-2 text-slate-500">recipe</td>
+          <MacroCell value={totals.kcal} tone="kcal" />
+          <MacroCell value={totals.protein_g} tone="protein" />
+          <MacroCell value={totals.carbs_g} tone="carbs" />
+          <MacroCell value={totals.fat_g} tone="fat" />
+          <td className="border-b border-slate-200 px-3 py-2 text-right">
+            <Button type="button" variant="ghost" className="h-8 w-8 px-0 text-red-600" aria-label="Remove entry" icon={<Trash2 size={16} />} onClick={() => onDelete(entry)} />
+          </td>
+        </tr>
+        {recipe.ingredients.map((item) => {
+          const override = entry.ingredient_overrides.find((entryItem) => entryItem.ingredient_id === item.ingredient_id);
+          const quantity = Number(override?.quantity ?? item.quantity);
+          const rowTotals = ingredientTotals({ ...item, quantity });
+          return (
+            <tr key={item.ingredient_id} className="hover:bg-slate-50">
+              <td className="border-b border-slate-100 px-3 py-1.5 pl-6 font-semibold text-slate-700">{item.name ?? "Ingredient"}</td>
+              <td className="border-b border-slate-100 px-3 py-1.5">
                 <Input
+                  className="ml-auto h-8 max-w-24 py-1 text-right"
                   type="number"
                   min="0"
                   step="0.1"
-                  defaultValue={Number(override?.quantity ?? item.quantity)}
+                  defaultValue={quantity}
                   onBlur={(event) => updateRecipeIngredient(item, Number(event.target.value))}
                 />
-              </Field>
-            );
-          })}
-        </div>
-      )}
-      {ingredient && (
-        <Field label={`${ingredient.name} (${entry.unit ?? ingredient.unit})`}>
-          <Input
-            type="number"
-            min="0"
-            step="0.1"
-            defaultValue={Number(entry.quantity ?? ingredient.default_quantity)}
-            onBlur={(event) => updateIngredientEntry(Number(event.target.value))}
-          />
-        </Field>
-      )}
-    </div>
+              </td>
+              <td className="border-b border-slate-100 px-3 py-1.5 text-slate-600">{override?.unit ?? item.unit}</td>
+              <MacroCell value={rowTotals.kcal} tone="kcal" subtle />
+              <MacroCell value={rowTotals.protein_g} tone="protein" subtle />
+              <MacroCell value={rowTotals.carbs_g} tone="carbs" subtle />
+              <MacroCell value={rowTotals.fat_g} tone="fat" subtle />
+              <td className="border-b border-slate-100 px-3 py-1.5"></td>
+            </tr>
+          );
+        })}
+      </>
+    );
+  }
+
+  if (!ingredient) return null;
+
+  return (
+    <tr className="hover:bg-slate-50">
+      <td className="border-b border-slate-200 px-3 py-2 font-black">{ingredient.name}</td>
+      <td className="border-b border-slate-200 px-3 py-2">
+        <Input
+          className="ml-auto h-8 max-w-24 py-1 text-right"
+          type="number"
+          min="0"
+          step="0.1"
+          defaultValue={Number(entry.quantity ?? ingredient.default_quantity)}
+          onBlur={(event) => updateIngredientEntry(Number(event.target.value))}
+        />
+      </td>
+      <td className="border-b border-slate-200 px-3 py-2 text-slate-600">{entry.unit ?? ingredient.unit}</td>
+      <MacroCell value={totals.kcal} tone="kcal" />
+      <MacroCell value={totals.protein_g} tone="protein" />
+      <MacroCell value={totals.carbs_g} tone="carbs" />
+      <MacroCell value={totals.fat_g} tone="fat" />
+      <td className="border-b border-slate-200 px-3 py-2 text-right">
+        <Button type="button" variant="ghost" className="h-8 w-8 px-0 text-red-600" aria-label="Remove entry" icon={<Trash2 size={16} />} onClick={() => onDelete(entry)} />
+      </td>
+    </tr>
+  );
+}
+
+function MacroCell({ value, tone, subtle = false }: { value: number; tone: "kcal" | "protein" | "carbs" | "fat"; subtle?: boolean }) {
+  const tones = {
+    kcal: subtle ? "bg-amber-50/60 text-amber-900" : "bg-amber-100 text-amber-950",
+    protein: subtle ? "bg-emerald-50/60 text-emerald-900" : "bg-emerald-100 text-emerald-950",
+    carbs: subtle ? "bg-sky-50/60 text-sky-900" : "bg-sky-100 text-sky-950",
+    fat: subtle ? "bg-rose-50/60 text-rose-900" : "bg-rose-100 text-rose-950",
+  };
+  return (
+    <td className={`border-b border-slate-100 px-3 py-2 text-right font-black tabular-nums ${tones[tone]}`}>
+      {round(value)}
+    </td>
   );
 }
 
@@ -943,6 +1038,13 @@ function ingredientTotals(item: RecipeIngredient) {
     fat_g: Number(item.fat_g || 0) * scale,
     carbs_g: Number(item.carbs_g || 0) * scale,
   };
+}
+
+function recipeWeight(entry: DailyFoodEntry, recipe: Recipe) {
+  return recipe.ingredients.reduce((total, item) => {
+    const override = entry.ingredient_overrides.find((entryItem) => entryItem.ingredient_id === item.ingredient_id);
+    return total + Number(override?.quantity ?? item.quantity ?? 0);
+  }, 0);
 }
 
 function round(value: number) {
