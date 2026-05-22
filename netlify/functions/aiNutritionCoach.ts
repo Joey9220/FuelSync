@@ -16,6 +16,7 @@ const dayTypes = ["rest", "gym", "endurance_bike", "interval_bike", "mixed"];
 const mealTypes = ["breakfast", "lunch", "dinner", "snack"];
 const confidences = ["low", "medium", "high"];
 const maxBodyBytes = 24000;
+const maxOutputTokens = 4096;
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -103,6 +104,10 @@ export const handler = async (event) => {
 
     const responseText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!responseText) throw Object.assign(new Error("Gemini returned an empty response."), { statusCode: 502 });
+    const finishReason = geminiResponse.candidates?.[0]?.finishReason;
+    if (finishReason === "MAX_TOKENS") {
+      throw Object.assign(new Error("Gemini response was truncated. Try again with fewer available recipes."), { statusCode: 502 });
+    }
 
     const rawOutput = parseAiOutput(responseText);
     const output = validateAiNutritionResponse(rawOutput, input);
@@ -134,7 +139,7 @@ async function callGemini(apiKey, input) {
             responseMimeType: "application/json",
             responseSchema,
             temperature: 0.25,
-            maxOutputTokens: 1800,
+            maxOutputTokens,
           },
         }),
       },
