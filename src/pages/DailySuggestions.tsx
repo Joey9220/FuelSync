@@ -56,6 +56,12 @@ export function DailySuggestions() {
     training: false,
     setup: false,
   });
+  const [openMealBlocks, setOpenMealBlocks] = useState<Record<MealType, boolean>>({
+    breakfast: true,
+    lunch: true,
+    dinner: true,
+    snack: true,
+  });
   const [error, setError] = useState("");
 
   const load = () => {
@@ -255,6 +261,8 @@ export function DailySuggestions() {
 
   const toggleSection = (key: keyof typeof openSections) =>
     setOpenSections((current) => ({ ...current, [key]: !current[key] }));
+  const toggleMealBlock = (mealType: MealType) =>
+    setOpenMealBlocks((current) => ({ ...current, [mealType]: !current[mealType] }));
 
   return (
     <div className="mx-auto max-w-7xl space-y-4">
@@ -351,9 +359,11 @@ export function DailySuggestions() {
                       timingLabel={label(timing[mealType])}
                       options={options}
                       selectedIds={selectedIds}
+                      open={openMealBlocks[mealType]}
                       entries={foodEntries.filter((entry) => entry.meal_type === mealType)}
                       recipes={recipes.filter((recipe) => recipe.meal_type === mealType)}
                       ingredients={ingredients}
+                      onToggle={() => toggleMealBlock(mealType)}
                       onSelect={(recipeId) => selectRecipe(mealType, recipeId)}
                       onAddEntry={addFoodEntry}
                       onUpdateEntry={updateFoodEntry}
@@ -458,9 +468,11 @@ function MealBlock({
   timingLabel,
   options,
   selectedIds,
+  open,
   entries,
   recipes,
   ingredients,
+  onToggle,
   onSelect,
   onAddEntry,
   onUpdateEntry,
@@ -472,9 +484,11 @@ function MealBlock({
   timingLabel: string;
   options: RecommendedRecipe[];
   selectedIds: Set<string>;
+  open: boolean;
   entries: DailyFoodEntry[];
   recipes: Recipe[];
   ingredients: Ingredient[];
+  onToggle: () => void;
   onSelect: (recipeId: string) => void;
   onAddEntry: (payload: DailyFoodEntryPayload) => void;
   onUpdateEntry: (id: string, payload: DailyFoodEntryPayload) => void;
@@ -534,78 +548,92 @@ function MealBlock({
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <button
+        type="button"
+        className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-1 text-left transition hover:bg-slate-50"
+        onClick={onToggle}
+        aria-expanded={open}
+      >
         <div>
           <h2 className="text-lg font-black capitalize">{label(mealType)}</h2>
           <p className="text-sm font-semibold text-slate-500">Best timing: {timingLabel}</p>
         </div>
-        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-mint">{options.length} options</span>
-      </div>
-      {options.length === 0 ? (
-        <EmptyAction
-          title={`No ${label(mealType)} recipes`}
-          body="Add recipes with matching metadata so this meal can be recommended."
-          actionLabel="Add recipe"
-          onAction={onAddRecipe}
-        />
-      ) : (
-        <div className="grid gap-3 xl:grid-cols-3">
-          {options.map((recipe, index) => (
-            <RecipeSuggestionCard
-              key={recipe.id}
-              recipe={recipe}
-              selected={selectedIds.has(recipe.id)}
-              rank={index + 1}
-              onSelect={() => onSelect(recipe.id)}
-              onSwap={() => onSelect(options[(index + 1) % options.length]?.id ?? recipe.id)}
-            />
-          ))}
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-mint">{options.length} options</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-lg font-black leading-none text-slate-600">
+            {open ? "-" : "+"}
+          </span>
         </div>
-      )}
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <Card className="border-slate-200 shadow-none">
-          <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-500">Add recipe</div>
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <Select value={recipeId} onChange={(event) => setRecipeId(event.target.value)} disabled={recipes.length === 0}>
-              {recipes.map((recipe) => <option key={recipe.id} value={recipe.id}>{recipe.name}</option>)}
-            </Select>
-            <Button type="button" variant="secondary" icon={<Plus />} onClick={addRecipeFromLibrary} disabled={!recipeId}>
-              Recipe
-            </Button>
-          </div>
-        </Card>
-        <Card className="border-slate-200 shadow-none">
-          <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-500">Add ingredient</div>
-          <div className="grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
-            <Select value={ingredientId} onChange={(event) => setIngredientId(event.target.value)} disabled={ingredients.length === 0}>
-              {ingredients.map((ingredient) => <option key={ingredient.id} value={ingredient.id}>{ingredient.name}</option>)}
-            </Select>
-            <Input
-              type="number"
-              min="0"
-              step="0.1"
-              value={ingredientQuantity}
-              onChange={(event) => setIngredientQuantity(Number(event.target.value))}
+      </button>
+      {open && (
+        <div className="mt-3">
+          {options.length === 0 ? (
+            <EmptyAction
+              title={`No ${label(mealType)} recipes`}
+              body="Add recipes with matching metadata so this meal can be recommended."
+              actionLabel="Add recipe"
+              onAction={onAddRecipe}
             />
-            <Button type="button" variant="secondary" icon={<ShoppingBasket />} onClick={addIngredientFromLibrary} disabled={!ingredientId}>
-              Ingredient
-            </Button>
+          ) : (
+            <div className="grid gap-3 xl:grid-cols-3">
+              {options.map((recipe, index) => (
+                <RecipeSuggestionCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  selected={selectedIds.has(recipe.id)}
+                  rank={index + 1}
+                  onSelect={() => onSelect(recipe.id)}
+                  onSwap={() => onSelect(options[(index + 1) % options.length]?.id ?? recipe.id)}
+                />
+              ))}
+            </div>
+          )}
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-none">
+              <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-500">Add recipe</div>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <Select value={recipeId} onChange={(event) => setRecipeId(event.target.value)} disabled={recipes.length === 0}>
+                  {recipes.map((recipe) => <option key={recipe.id} value={recipe.id}>{recipe.name}</option>)}
+                </Select>
+                <Button type="button" variant="secondary" icon={<Plus />} onClick={addRecipeFromLibrary} disabled={!recipeId}>
+                  Recipe
+                </Button>
+              </div>
+            </Card>
+            <Card className="border-slate-200 shadow-none">
+              <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-500">Add ingredient</div>
+              <div className="grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
+                <Select value={ingredientId} onChange={(event) => setIngredientId(event.target.value)} disabled={ingredients.length === 0}>
+                  {ingredients.map((ingredient) => <option key={ingredient.id} value={ingredient.id}>{ingredient.name}</option>)}
+                </Select>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={ingredientQuantity}
+                  onChange={(event) => setIngredientQuantity(Number(event.target.value))}
+                />
+                <Button type="button" variant="secondary" icon={<ShoppingBasket />} onClick={addIngredientFromLibrary} disabled={!ingredientId}>
+                  Ingredient
+                </Button>
+              </div>
+            </Card>
           </div>
-        </Card>
-      </div>
-      {entries.length > 0 && (
-        <div className="mt-4 space-y-3">
-          <div className="text-sm font-black uppercase tracking-wide text-slate-500">Logged for {label(mealType)}</div>
-          {entries.map((entry) => (
-            <FoodEntryEditor
-              key={entry.id}
-              entry={entry}
-              recipes={recipes}
-              ingredients={ingredients}
-              onUpdate={onUpdateEntry}
-              onDelete={onDeleteEntry}
-            />
-          ))}
+          {entries.length > 0 && (
+            <div className="mt-4 space-y-3">
+              <div className="text-sm font-black uppercase tracking-wide text-slate-500">Logged for {label(mealType)}</div>
+              {entries.map((entry) => (
+                <FoodEntryEditor
+                  key={entry.id}
+                  entry={entry}
+                  recipes={recipes}
+                  ingredients={ingredients}
+                  onUpdate={onUpdateEntry}
+                  onDelete={onDeleteEntry}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>
