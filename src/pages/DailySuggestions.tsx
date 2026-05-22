@@ -90,6 +90,7 @@ export function DailySuggestions() {
                     date,
                     meal_type: selection.meal_type,
                     entry_type: "recipe",
+                    intake_time: defaultMealTime(selection.meal_type),
                     recipe_id: recipe.id,
                     ingredient_id: null,
                     quantity: null,
@@ -175,6 +176,7 @@ export function DailySuggestions() {
       date,
       meal_type: mealType,
       entry_type: "recipe",
+      intake_time: defaultMealTime(mealType),
       recipe_id: recipeId,
       ingredient_id: null,
       quantity: null,
@@ -346,6 +348,8 @@ export function DailySuggestions() {
             onApplyTargets={applyAiTargets}
           />
 
+          <LiveEnergyChart entries={foodEntries} recipes={recipes} ingredients={ingredients} activities={activities} />
+
           <Collapsible title="Recommended meal plan" open={openSections.meals} onToggle={() => toggleSection("meals")}>
             {!hasAnyRecommendation ? (
               <EmptyState
@@ -514,6 +518,8 @@ function MealBlock({
   const [ingredientId, setIngredientId] = useState(ingredients[0]?.id ?? "");
   const selectedIngredient = ingredients.find((ingredient) => ingredient.id === ingredientId);
   const [ingredientQuantity, setIngredientQuantity] = useState(selectedIngredient?.default_quantity ?? 0);
+  const [recipeTime, setRecipeTime] = useState(defaultMealTime(mealType));
+  const [ingredientTime, setIngredientTime] = useState(defaultMealTime(mealType));
 
   useEffect(() => {
     if (!recipeId && recipes[0]) setRecipeId(recipes[0].id);
@@ -534,6 +540,7 @@ function MealBlock({
       date,
       meal_type: mealType,
       entry_type: "recipe",
+      intake_time: recipeTime,
       recipe_id: recipe.id,
       ingredient_id: null,
       quantity: null,
@@ -553,6 +560,7 @@ function MealBlock({
       date,
       meal_type: mealType,
       entry_type: "ingredient",
+      intake_time: ingredientTime,
       recipe_id: null,
       ingredient_id: ingredient.id,
       quantity: Number(ingredientQuantity || ingredient.default_quantity),
@@ -607,10 +615,11 @@ function MealBlock({
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <Card className="border-slate-200 shadow-none">
               <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-500">Add recipe</div>
-              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <div className="grid gap-2 sm:grid-cols-[1fr_8rem_auto]">
                 <Select value={recipeId} onChange={(event) => setRecipeId(event.target.value)} disabled={recipes.length === 0}>
                   {recipes.map((recipe) => <option key={recipe.id} value={recipe.id}>{recipe.name}</option>)}
                 </Select>
+                <Input type="time" value={recipeTime} onChange={(event) => setRecipeTime(event.target.value)} />
                 <Button type="button" variant="secondary" icon={<Plus />} onClick={addRecipeFromLibrary} disabled={!recipeId}>
                   Recipe
                 </Button>
@@ -618,7 +627,7 @@ function MealBlock({
             </Card>
             <Card className="border-slate-200 shadow-none">
               <div className="mb-2 text-sm font-black uppercase tracking-wide text-slate-500">Add ingredient</div>
-              <div className="grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
+              <div className="grid gap-2 sm:grid-cols-[1fr_7rem_8rem_auto]">
                 <Select value={ingredientId} onChange={(event) => setIngredientId(event.target.value)} disabled={ingredients.length === 0}>
                   {ingredients.map((ingredient) => <option key={ingredient.id} value={ingredient.id}>{ingredient.name}</option>)}
                 </Select>
@@ -629,6 +638,7 @@ function MealBlock({
                   value={ingredientQuantity}
                   onChange={(event) => setIngredientQuantity(Number(event.target.value))}
                 />
+                <Input type="time" value={ingredientTime} onChange={(event) => setIngredientTime(event.target.value)} />
                 <Button type="button" variant="secondary" icon={<ShoppingBasket />} onClick={addIngredientFromLibrary} disabled={!ingredientId}>
                   Ingredient
                 </Button>
@@ -672,6 +682,7 @@ function LoggedFoodTable({
         <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
           <tr>
             <th className="border-b border-slate-200 px-3 py-2 text-left">Item</th>
+            <th className="border-b border-slate-200 px-3 py-2 text-left">Time</th>
             <th className="border-b border-slate-200 px-3 py-2 text-right">Qty</th>
             <th className="border-b border-slate-200 px-3 py-2 text-left">Unit</th>
             <th className="border-b border-slate-200 px-3 py-2 text-right">kcal</th>
@@ -721,11 +732,26 @@ function LoggedFoodRows({
       date: normalizeEntryDate(entry.date),
       meal_type: entry.meal_type,
       entry_type: "ingredient",
+      intake_time: entry.intake_time,
       recipe_id: null,
       ingredient_id: ingredient.id,
       quantity,
       unit: entry.unit ?? ingredient.unit,
       ingredient_overrides: [],
+    });
+  };
+
+  const updateEntryTime = (intakeTime: string) => {
+    onUpdate(entry.id, {
+      date: normalizeEntryDate(entry.date),
+      meal_type: entry.meal_type,
+      entry_type: entry.entry_type,
+      intake_time: intakeTime || null,
+      recipe_id: entry.recipe_id,
+      ingredient_id: entry.ingredient_id,
+      quantity: entry.quantity,
+      unit: entry.unit,
+      ingredient_overrides: entry.ingredient_overrides,
     });
   };
 
@@ -743,6 +769,7 @@ function LoggedFoodRows({
       date: normalizeEntryDate(entry.date),
       meal_type: entry.meal_type,
       entry_type: "recipe",
+      intake_time: entry.intake_time,
       recipe_id: recipe.id,
       ingredient_id: null,
       quantity: null,
@@ -756,6 +783,9 @@ function LoggedFoodRows({
       <>
         <tr className="bg-slate-50">
           <td className="border-b border-slate-200 px-3 py-2 font-black">{recipe.name}</td>
+          <td className="border-b border-slate-200 px-3 py-2">
+            <Input className="h-8 max-w-28 py-1" type="time" defaultValue={entry.intake_time ?? defaultMealTime(entry.meal_type)} onBlur={(event) => updateEntryTime(event.target.value)} />
+          </td>
           <td className="border-b border-slate-200 px-3 py-2 text-right font-bold tabular-nums">{round(recipeWeight(entry, recipe))}</td>
           <td className="border-b border-slate-200 px-3 py-2 text-slate-500">recipe</td>
           <MacroCell value={totals.kcal} tone="kcal" />
@@ -773,6 +803,7 @@ function LoggedFoodRows({
           return (
             <tr key={item.ingredient_id} className="hover:bg-slate-50">
               <td className="border-b border-slate-100 px-3 py-1.5 pl-6 font-semibold text-slate-700">{item.name ?? "Ingredient"}</td>
+              <td className="border-b border-slate-100 px-3 py-1.5 text-slate-400"></td>
               <td className="border-b border-slate-100 px-3 py-1.5">
                 <Input
                   className="ml-auto h-8 max-w-24 py-1 text-right"
@@ -801,6 +832,9 @@ function LoggedFoodRows({
   return (
     <tr className="hover:bg-slate-50">
       <td className="border-b border-slate-200 px-3 py-2 font-black">{ingredient.name}</td>
+      <td className="border-b border-slate-200 px-3 py-2">
+        <Input className="h-8 max-w-28 py-1" type="time" defaultValue={entry.intake_time ?? defaultMealTime(entry.meal_type)} onBlur={(event) => updateEntryTime(event.target.value)} />
+      </td>
       <td className="border-b border-slate-200 px-3 py-2">
         <Input
           className="ml-auto h-8 max-w-24 py-1 text-right"
@@ -834,6 +868,103 @@ function MacroCell({ value, tone, subtle = false }: { value: number; tone: "kcal
     <td className={`border-b border-slate-100 px-3 py-2 text-right font-black tabular-nums ${tones[tone]}`}>
       {round(value)}
     </td>
+  );
+}
+
+function LiveEnergyChart({
+  entries,
+  recipes,
+  ingredients,
+  activities,
+}: {
+  entries: DailyFoodEntry[];
+  recipes: Recipe[];
+  ingredients: Ingredient[];
+  activities: Activity[];
+}) {
+  const events = [
+    ...entries.map((entry) => ({
+      type: "meal" as const,
+      minute: timeToMinutes(entry.intake_time ?? defaultMealTime(entry.meal_type)),
+      kcal: calculateFoodEntryTotals(entry, recipes, ingredients).kcal,
+      label: entryLabel(entry, recipes, ingredients),
+    })),
+    ...activities
+      .filter((activity) => activity.start_time)
+      .map((activity) => ({
+        type: "workout" as const,
+        minute: timeToMinutes(activity.start_time ?? "12:00"),
+        kcal: -estimateWorkoutKcal(activity),
+        label: label(activity.activity_type),
+      })),
+  ].sort((a, b) => a.minute - b.minute);
+
+  const points = [{ minute: 0, value: 0 }];
+  let running = 0;
+  for (const event of events) {
+    points.push({ minute: event.minute, value: running });
+    running += event.kcal;
+    points.push({ minute: event.minute, value: running });
+  }
+  points.push({ minute: 1440, value: running });
+
+  const minValue = Math.min(-250, ...points.map((point) => point.value));
+  const maxValue = Math.max(500, ...points.map((point) => point.value));
+  const range = Math.max(1, maxValue - minValue);
+  const width = 960;
+  const height = 260;
+  const padding = { left: 52, right: 20, top: 24, bottom: 36 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const x = (minute: number) => padding.left + (minute / 1440) * plotWidth;
+  const y = (value: number) => padding.top + ((maxValue - value) / range) * plotHeight;
+  const path = points.map((point) => `${x(point.minute)},${y(point.value)}`).join(" ");
+  const zeroY = y(0);
+
+  return (
+    <Card>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-black uppercase tracking-wide text-mint">Live Energy</div>
+          <p className="text-sm font-semibold text-slate-500">Net logged kcal by intake time, with workout estimates deducted.</p>
+        </div>
+        <div className="text-right text-sm font-black">
+          {Math.round(running)} kcal
+          <div className="text-xs font-bold text-slate-500">current net</div>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <svg viewBox={`0 0 ${width} ${height}`} className="min-w-[760px] w-full rounded-lg bg-slate-950">
+          {[minValue, 0, maxValue].map((tick) => (
+            <g key={tick}>
+              <line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} stroke={tick === 0 ? "#e2e8f0" : "#334155"} strokeDasharray={tick === 0 ? "4 4" : "0"} />
+              <text x={padding.left - 10} y={y(tick) + 4} textAnchor="end" fill="#cbd5e1" fontSize="12">{Math.round(tick)}</text>
+            </g>
+          ))}
+          {[0, 360, 720, 1080, 1440].map((minute) => (
+            <g key={minute}>
+              <line x1={x(minute)} x2={x(minute)} y1={padding.top} y2={height - padding.bottom} stroke="#1e293b" />
+              <text x={x(minute)} y={height - 12} textAnchor="middle" fill="#cbd5e1" fontSize="12">{formatHour(minute)}</text>
+            </g>
+          ))}
+          <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} stroke="#cbd5e1" strokeDasharray="4 4" />
+          <polyline points={path} fill="none" stroke="#f8fafc" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          {events.map((event, index) => {
+            const valueAfter = [...points].reverse().find((point) => point.minute === event.minute)?.value ?? 0;
+            return (
+              <g key={`${event.type}-${event.minute}-${index}`}>
+                <circle cx={x(event.minute)} cy={y(valueAfter)} r="7" fill={event.type === "meal" ? "#f59e0b" : "#38bdf8"} stroke="#0f172a" strokeWidth="2" />
+                <title>{`${formatHour(event.minute)} ${event.label}: ${Math.round(event.kcal)} kcal`}</title>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold text-slate-600">
+        <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-amber-500" />Logged intake</span>
+        <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-sky-400" />Workout estimate</span>
+      </div>
+    </Card>
   );
 }
 
@@ -1045,6 +1176,46 @@ function recipeWeight(entry: DailyFoodEntry, recipe: Recipe) {
     const override = entry.ingredient_overrides.find((entryItem) => entryItem.ingredient_id === item.ingredient_id);
     return total + Number(override?.quantity ?? item.quantity ?? 0);
   }, 0);
+}
+
+function defaultMealTime(mealType: MealType) {
+  const defaults: Record<MealType, string> = {
+    breakfast: "08:00",
+    lunch: "12:30",
+    dinner: "19:00",
+    snack: "16:00",
+  };
+  return defaults[mealType];
+}
+
+function timeToMinutes(time: string) {
+  const [hours, minutes] = time.slice(0, 5).split(":").map(Number);
+  return Math.min(1440, Math.max(0, (hours || 0) * 60 + (minutes || 0)));
+}
+
+function formatHour(minute: number) {
+  const hours = Math.floor(minute / 60);
+  const minutes = minute % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function estimateWorkoutKcal(activity: Activity) {
+  const minutes = Number(activity.duration_minutes ?? 45);
+  const intensityFactor = activity.intensity === "high" ? 11 : activity.intensity === "medium" ? 8 : 5;
+  const typeFactor = activity.activity_type === "endurance_bike"
+    ? 1.2
+    : activity.activity_type === "interval_bike"
+      ? 1.35
+      : activity.activity_type === "gym"
+        ? 0.85
+        : 0;
+  return Math.round(minutes * intensityFactor * typeFactor);
+}
+
+function entryLabel(entry: DailyFoodEntry, recipes: Recipe[], ingredients: Ingredient[]) {
+  if (entry.recipe_id) return recipes.find((recipe) => recipe.id === entry.recipe_id)?.name ?? "Recipe";
+  if (entry.ingredient_id) return ingredients.find((ingredient) => ingredient.id === entry.ingredient_id)?.name ?? "Ingredient";
+  return "Logged food";
 }
 
 function round(value: number) {

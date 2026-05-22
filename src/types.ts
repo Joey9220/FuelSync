@@ -94,6 +94,7 @@ export type DailyFoodEntry = {
   date: string;
   meal_type: MealType;
   entry_type: "recipe" | "ingredient";
+  intake_time: string | null;
   recipe_id: string | null;
   ingredient_id: string | null;
   quantity: number | null;

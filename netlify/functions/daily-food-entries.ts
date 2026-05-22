@@ -2,7 +2,7 @@ import { requireAuth } from "./_shared/auth";
 import { db } from "./_shared/db";
 import { fail, noContent, ok, parseJson } from "./_shared/http";
 import type { Handler } from "./_shared/netlify-types";
-import { mealTypes, requireDate, requireEnum, requirePositiveNumber, requireString } from "./_shared/validation";
+import { mealTypes, optionalString, requireDate, requireEnum, requirePositiveNumber, requireString } from "./_shared/validation";
 
 const entryTypes = ["recipe", "ingredient"] as const;
 
@@ -16,6 +16,7 @@ type EntryPayload = {
   date: string;
   meal_type: (typeof mealTypes)[number];
   entry_type: (typeof entryTypes)[number];
+  intake_time: string | null;
   recipe_id: string | null;
   ingredient_id: string | null;
   quantity: number | null;
@@ -46,10 +47,10 @@ export const handler: Handler = async (event) => {
       await validateOwnership(sql, userId, payload);
       const [entry] = await sql`
         insert into daily_food_entries (
-          user_id, date, meal_type, entry_type, recipe_id, ingredient_id, quantity, unit, ingredient_overrides
+          user_id, date, meal_type, entry_type, intake_time, recipe_id, ingredient_id, quantity, unit, ingredient_overrides
         )
         values (
-          ${userId}, ${payload.date}, ${payload.meal_type}, ${payload.entry_type}, ${payload.recipe_id},
+          ${userId}, ${payload.date}, ${payload.meal_type}, ${payload.entry_type}, ${payload.intake_time}, ${payload.recipe_id},
           ${payload.ingredient_id}, ${payload.quantity}, ${payload.unit}, ${sql.json(payload.ingredient_overrides)}
         )
         returning *
@@ -67,6 +68,7 @@ export const handler: Handler = async (event) => {
           date = ${payload.date},
           meal_type = ${payload.meal_type},
           entry_type = ${payload.entry_type},
+          intake_time = ${payload.intake_time},
           recipe_id = ${payload.recipe_id},
           ingredient_id = ${payload.ingredient_id},
           quantity = ${payload.quantity},
@@ -99,12 +101,14 @@ export const handler: Handler = async (event) => {
 function validateEntry(fields: Record<string, unknown>): EntryPayload {
   const entry_type = requireEnum(fields, "entry_type", entryTypes);
   const overrides = validateOverrides(fields.ingredient_overrides);
+  const intake_time = optionalTime(fields, "intake_time");
 
   if (entry_type === "recipe") {
     return {
       date: requireDate(fields, "date"),
       meal_type: requireEnum(fields, "meal_type", mealTypes),
       entry_type,
+      intake_time,
       recipe_id: requireString(fields, "recipe_id"),
       ingredient_id: null,
       quantity: null,
@@ -117,12 +121,22 @@ function validateEntry(fields: Record<string, unknown>): EntryPayload {
     date: requireDate(fields, "date"),
     meal_type: requireEnum(fields, "meal_type", mealTypes),
     entry_type,
+    intake_time,
     recipe_id: null,
     ingredient_id: requireString(fields, "ingredient_id"),
     quantity: requirePositiveNumber(fields, "quantity"),
     unit: requireString(fields, "unit"),
     ingredient_overrides: [],
   };
+}
+
+function optionalTime(fields: Record<string, unknown>, key: string) {
+  const value = optionalString(fields, key);
+  if (!value) return null;
+  if (!/^\d{2}:\d{2}$/.test(value)) {
+    throw Object.assign(new Error(`${key} must be HH:MM.`), { statusCode: 400 });
+  }
+  return value;
 }
 
 function validateOverrides(value: unknown): IngredientOverride[] {
