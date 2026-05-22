@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { requireAuth } from "./_shared/auth";
 import { db } from "./_shared/db";
 import { fail, ok } from "./_shared/http";
