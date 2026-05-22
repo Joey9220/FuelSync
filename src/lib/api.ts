@@ -34,13 +34,16 @@ export function createApiClient(getToken: () => Promise<string>) {
         Authorization: `Bearer ${token}`,
         ...options.headers,
       },
+    }).catch((error) => {
+      const detail = error instanceof Error ? error.message : "Network request failed.";
+      throw new Error(`Could not reach ${path}: ${detail}`);
     });
 
     if (response.status === 204) return undefined as T;
 
     const data = await parseResponseBody(response);
     if (!response.ok) {
-      throw new Error(data.error || "Request failed.");
+      throw new Error(errorMessage(data, response.status, path));
     }
     return data as T;
   }
@@ -155,6 +158,12 @@ async function parseResponseBody(response: Response) {
       error: text.slice(0, 500) || `Request failed with status ${response.status}.`,
     };
   }
+}
+
+function errorMessage(data: Record<string, unknown>, status: number, path: string) {
+  const candidates = [data.error, data.message, data.errorMessage, data.details];
+  const message = candidates.find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  return message ?? `Request to ${path} failed with status ${status}.`;
 }
 
 function nullableNumber(value: unknown) {

@@ -112,6 +112,10 @@ export const handler = async (event) => {
 
     return ok({ suggestion: output, model });
   } catch (error) {
+    console.error("aiNutritionCoach failed", {
+      message: error instanceof Error ? error.message : String(error),
+      statusCode: typeof error === "object" && error && "statusCode" in error ? error.statusCode : undefined,
+    });
     return fail(error);
   }
 };
