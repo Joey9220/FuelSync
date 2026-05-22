@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Edit2, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityFormModal } from "../components/ActivityFormModal";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
@@ -27,6 +27,7 @@ export function Planner() {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Activity | null | "new">(null);
   const [newDate, setNewDate] = useState<string | undefined>();
+  const todayCardRef = useRef<HTMLDivElement | null>(null);
 
   const days = useMemo(() => plannerDays(anchor), [anchor]);
   const from = toDateKey(days[0]);
@@ -59,6 +60,11 @@ export function Planner() {
   };
 
   useEffect(load, [from, to]);
+
+  useEffect(() => {
+    if (loading || !todayCardRef.current) return;
+    todayCardRef.current.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+  }, [loading, from, to, today]);
 
   function addForDate(date: string) {
     setNewDate(date);
@@ -119,61 +125,66 @@ export function Planner() {
               const ingested = addMacroTotals(selectedRecipes.map((recipe) => recipe.totals));
               const target = targets.find((item) => item.day_type === dayType);
               return (
-                <Card
-                  key={dateKey}
-                  className={`flex min-h-[340px] flex-col p-0 ${
-                    isToday ? "border-mint ring-2 ring-emerald-100" : inAnchorMonth ? "" : "bg-slate-50 opacity-80"
-                  }`}
-                >
-                  <div className={`border-b p-3 ${isToday ? "border-emerald-100 bg-emerald-50/70" : "border-slate-100"}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="text-xs font-black uppercase tracking-wide text-mint">{formatDayName(day)}</div>
-                        <h2 className="mt-1 text-base font-black">{formatShortDate(dateKey)}</h2>
+                <div key={dateKey} ref={isToday ? todayCardRef : undefined} className="scroll-mt-4">
+                  <Card
+                    className={`flex min-h-[340px] flex-col p-0 ${
+                      isToday
+                        ? "border-2 border-emerald-700 bg-emerald-50/50 shadow-lg ring-4 ring-emerald-200"
+                        : inAnchorMonth
+                          ? ""
+                          : "bg-slate-50 opacity-80"
+                    }`}
+                  >
+                    <div className={`border-b p-3 ${isToday ? "border-emerald-700 bg-emerald-700 text-white" : "border-slate-100"}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className={`text-xs font-black uppercase tracking-wide ${isToday ? "text-emerald-100" : "text-mint"}`}>{formatDayName(day)}</div>
+                          <h2 className="mt-1 text-base font-black">{formatShortDate(dateKey)}</h2>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          {isToday && <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-black uppercase text-emerald-800">Today</span>}
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-black ${isToday ? "bg-emerald-950/30 text-white" : "bg-slate-100 text-slate-700"}`}>
+                            {dayActivities.length}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        {isToday && <span className="rounded-full bg-mint px-2.5 py-1 text-[11px] font-black uppercase text-white">Today</span>}
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">
-                          {dayActivities.length}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-black ${isToday ? "bg-white text-emerald-800" : "bg-emerald-50 text-emerald-800"}`}>
+                          {label(dayType)}
                         </span>
+                        <Button
+                          variant="secondary"
+                          className="min-h-9 px-3 py-1.5 text-xs"
+                          icon={<Plus size={14} />}
+                          onClick={() => addForDate(dateKey)}
+                        >
+                          Add
+                        </Button>
                       </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-800">
-                        {label(dayType)}
-                      </span>
-                      <Button
-                        variant="secondary"
-                        className="min-h-9 px-3 py-1.5 text-xs"
-                        icon={<Plus size={14} />}
-                        onClick={() => addForDate(dateKey)}
-                      >
-                        Add
-                      </Button>
-                    </div>
-                  </div>
 
-                  <div className="flex-1 space-y-3 p-3">
-                    <MacroPlannerBlock ingested={ingested} target={target} targetGoal={targetGoal} />
-                    {dayActivities.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
-                        Rest day by default. Add a workout to update suggestions.
-                      </div>
-                    ) : (
-                      dayActivities.map((activity) => (
-                        <ActivityBlock
-                          key={activity.id}
-                          activity={activity}
-                          onEdit={() => setEditing(activity)}
-                          onDelete={async () => {
-                            await api.deleteActivity(activity.id);
-                            setActivities((current) => current.filter((item) => item.id !== activity.id));
-                          }}
-                        />
-                      ))
-                    )}
-                  </div>
-                </Card>
+                    <div className="flex-1 space-y-3 p-3">
+                      <MacroPlannerBlock ingested={ingested} target={target} targetGoal={targetGoal} />
+                      {dayActivities.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+                          Rest day by default. Add a workout to update suggestions.
+                        </div>
+                      ) : (
+                        dayActivities.map((activity) => (
+                          <ActivityBlock
+                            key={activity.id}
+                            activity={activity}
+                            onEdit={() => setEditing(activity)}
+                            onDelete={async () => {
+                              await api.deleteActivity(activity.id);
+                              setActivities((current) => current.filter((item) => item.id !== activity.id));
+                            }}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </Card>
+                </div>
               );
             })}
           </div>
